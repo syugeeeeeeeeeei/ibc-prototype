@@ -13,9 +13,9 @@
 
 # 環境の完全な初期化を行うメインターゲット
 init: down-v clean .env
-	@echo "🛠️  Building init image and initializing chain data..."
-	@docker-compose up --build --remove-orphans init-node -d
-	@echo "✅ Initialization complete. You can now run 'make start' or 'make up-d'."
+	@echo "🛠️  Initializing chain data..."
+	@docker-compose run --rm init-node
+	@echo "✅ Initialization complete. You can now run 'make start'."
 
 # 初期化済みの環境をバックグラウンドで起動する
 start:

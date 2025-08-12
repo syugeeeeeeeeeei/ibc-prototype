@@ -18,6 +18,8 @@ if [ ! -f /data/gaia-1/config/genesis.json ]; then
   sed -i 's/"stake"/"uatom"/g' /data/gaia-1/config/genesis.json
   sed -i 's/127.0.0.1/0.0.0.0/g' /data/gaia-1/config/config.toml
   sed -i 's/enable = false/enable = true/g' /data/gaia-1/config/app.toml
+  # ★★★ 修正点： 最低ガス価格をリレイヤーの設定(0.01uatom)と合わせる ★★★
+  sed -i 's/minimum-gas-prices = ""/minimum-gas-prices = "1uatom"/g' /data/gaia-1/config/app.toml
 
   echo "$MNEMONIC_1" | gaiad keys add $USER_1 --home /data/gaia-1 --keyring-backend=test --recover
   echo "$RELAYER_MNEMONIC_1" | gaiad keys add $RELAYER_KEY_1 --home /data/gaia-1 --keyring-backend=test --recover
@@ -37,6 +39,8 @@ if [ ! -f /data/gaia-2/config/genesis.json ]; then
   sed -i 's/"stake"/"uatom"/g' /data/gaia-2/config/genesis.json
   sed -i 's/127.0.0.1/0.0.0.0/g' /data/gaia-2/config/config.toml
   sed -i 's/enable = false/enable = true/g' /data/gaia-2/config/app.toml
+  # ★★★ 修正点： 最低ガス価格をリレイヤーの設定(0.01uatom)と合わせる ★★★
+  sed -i 's/minimum-gas-prices = ""/minimum-gas-prices = "1uatom"/g' /data/gaia-2/config/app.toml
   
   echo "$MNEMONIC_2" | gaiad keys add $USER_2 --home /data/gaia-2 --keyring-backend=test --recover
   echo "$RELAYER_MNEMONIC_2" | gaiad keys add $RELAYER_KEY_2 --home /data/gaia-2 --keyring-backend=test --recover
