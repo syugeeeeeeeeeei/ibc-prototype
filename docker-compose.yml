@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Dockerfileを使わず、マウントしたスクリプトを実行する方式
+  init-node:
+    image: ghcr.io/cosmos/gaia:v25.1.0
+    container_name: init-node
+    user: root
+    entrypoint: /bin/sh
+    volumes:
+      - ./scripts:/scripts
+      - gaia-1-data:/data/gaia-1
+      - gaia-2-data:/data/gaia-2
+    command: /scripts/init.sh
+
+  gaia-1:
+    image: ghcr.io/cosmos/gaia:v25.1.0
+    container_name: gaia-1
+    user: root
+    depends_on:
+      init-node:
+        condition: service_completed_successfully
+    volumes:
+      - gaia-1-data:/root/.gaia
+    ports:
+      - "26657:26657"
+      - "1317:1317"
+      - "9090:9090"
+    # 最低ガス価格を指定
+    command: gaiad start --home /root/.gaia --minimum-gas-prices 0.00uatom
+
+  gaia-2:
+    image: ghcr.io/cosmos/gaia:v25.1.0
+    container_name: gaia-2
+    user: root
+    depends_on:
+      init-node:
+        condition: service_completed_successfully
+    volumes:
+      - gaia-2-data:/root/.gaia
+    ports:
+      - "26658:26657"
+      - "1318:1317"
+      - "9091:9091"
+    # 最低ガス価格を指定
+    command: gaiad start --home /root/.gaia --minimum-gas-prices 0.00uatom
+
+  ibc-relayer:
+    image: ghcr.io/cosmos/relayer:v2.6.0 # ご指定のバージョン
+    container_name: ibc-relayer
+    depends_on:
+      gaia-1:
+        condition: service_started
+      gaia-2:
+        condition: service_started
+    volumes:
+      - relayer-data:/home/relayer/.relayer
+    entrypoint: ""
+    command:
+      - "/bin/sh"
+      - "-c"
+      - |
+        set -ex
+        if [ ! -f /home/relayer/.relayer/config/config.yaml ]; then
+          sleep 10
+          CHAIN_ID_1='gaia-1'
+          CHAIN_ID_2='gaia-2'
+          RPC_1='http://gaia-1:26657'
+          RPC_2='http://gaia-2:26657'
+          GRPC_1='gaia-1:9090'
+          GRPC_2='gaia-2:9090'
+          KEY_NAME='relayer'
+          MNEMONIC_1='arrest word address hobby offer vague inside virtual ten popular voyage limit weekend december lobster steel bitter turn sponsor dry various trigger window humble foster'
+          # 有効なニーモニックに修正
+          MNEMONIC_2='satisfy adjust timber high purchase tuition stool faith fine install that you unaware feed domain license impose boss human eager hat rent physical basic'
+          # PATH_NAME変数を定義
+          PATH_NAME='my-path'
+        
+          rly config init
+          rly chains add --chain-id $$CHAIN_ID_1 --rpc-addr $$RPC_1 --grpc-addr $$GRPC_1 --key-name $$KEY_NAME --account-prefix cosmos --gas-adjustment 1.2 --gas-prices 0.01uatom --keyring-backend test --trusting-period 336h
+          rly chains add --chain-id $$CHAIN_ID_2 --rpc-addr $$RPC_2 --grpc-addr $$GRPC_2 --key-name $$KEY_NAME --account-prefix cosmos --gas-adjustment 1.2 --gas-prices 0.01uatom --keyring-backend test --trusting-period 336h
+          rly keys restore $$CHAIN_ID_1 $$KEY_NAME "$$MNEMONIC_1"
+          rly keys restore $$CHAIN_ID_2 $$KEY_NAME "$$MNEMONIC_2"
+          rly paths new $$CHAIN_ID_1 $$CHAIN_ID_2 $$PATH_NAME --src-port transfer --dst-port transfer --order unordered --version ics20-1
+          sleep 5
+          rly transact link $$PATH_NAME --debug
+        fi
+        rly start
+
+volumes:
+  gaia-1-data:
+  gaia-2-data:
+  relayer-data:
