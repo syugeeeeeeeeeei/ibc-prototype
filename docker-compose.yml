@@ -1,12 +1,12 @@
-version: '3.8'
 
 services:
-  # Dockerfileを使わず、マウントしたスクリプトを実行する方式
   init-node:
     image: ghcr.io/cosmos/gaia:v25.1.0
     container_name: init-node
     user: root
-    entrypoint: /bin/sh
+    entrypoint: "/bin/sh"
+    env_file:
+      - .env
     volumes:
       - ./scripts:/scripts
       - gaia-1-data:/data/gaia-1
@@ -26,7 +26,6 @@ services:
       - "26657:26657"
       - "1317:1317"
       - "9090:9090"
-    # 最低ガス価格を指定
     command: gaiad start --home /root/.gaia --minimum-gas-prices 0.00uatom
 
   gaia-2:
@@ -42,11 +41,10 @@ services:
       - "26658:26657"
       - "1318:1317"
       - "9091:9091"
-    # 最低ガス価格を指定
     command: gaiad start --home /root/.gaia --minimum-gas-prices 0.00uatom
 
   ibc-relayer:
-    image: ghcr.io/cosmos/relayer:v2.6.0 # ご指定のバージョン
+    image: ghcr.io/cosmos/relayer:v2.6.0
     container_name: ibc-relayer
     depends_on:
       gaia-1:
@@ -71,9 +69,7 @@ services:
           GRPC_2='gaia-2:9090'
           KEY_NAME='relayer'
           MNEMONIC_1='arrest word address hobby offer vague inside virtual ten popular voyage limit weekend december lobster steel bitter turn sponsor dry various trigger window humble foster'
-          # 有効なニーモニックに修正
           MNEMONIC_2='satisfy adjust timber high purchase tuition stool faith fine install that you unaware feed domain license impose boss human eager hat rent physical basic'
-          # PATH_NAME変数を定義
           PATH_NAME='my-path'
         
           rly config init

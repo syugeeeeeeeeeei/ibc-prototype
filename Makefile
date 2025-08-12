@@ -4,19 +4,18 @@
 # デフォルトのコマンドを 'help' に設定
 .DEFAULT_GOAL := help
 
-# ニーモニックを含む .env ファイルを生成する
+# ニーモニックを含む .env ファイルを生成するターゲット
 .env:
-	@echo "🔑 Generating new mnemonics..."
-	@(cd mnemonic-generator && yarn ts-node generateMnemonic.ts) > ./.env
+	@echo "🔑 Building generator image and creating new mnemonics..."
+	@docker build -t mnemonic-generator -f ./mnemonic-generator/Dockerfile.gen .
+	@docker run --rm mnemonic-generator > ./.env
 	@echo "✅ Mnemonics generated and saved to .env file."
 
 # 環境の完全な初期化を行うメインターゲット
 init: down-v clean .env
 	@echo "🛠️  Building init image and initializing chain data..."
-	@docker-compose --env-file .env up --build --remove-orphans init-node -d
-	@echo "✅ Initialization complete. "
-	@echo "🌐 Initializing Gaia-1 and Gaia-2 nodes..."
-	@make start
+	@docker-compose up --build --remove-orphans init-node -d
+	@echo "✅ Initialization complete. You can now run 'make start' or 'make up-d'."
 
 # 初期化済みの環境をバックグラウンドで起動する
 start:
@@ -29,11 +28,13 @@ up-d: start
 # コンテナを停止
 down:
 	@echo "🛑 Stopping containers..."
+	@touch .env
 	@docker-compose down
 
 # コンテナを停止し、全データ（ボリューム）を削除
 down-v:
 	@echo "🔥 Stopping containers and removing all data..."
+	@touch .env
 	@docker-compose down -v
 
 # 全コンテナのログを追跡表示

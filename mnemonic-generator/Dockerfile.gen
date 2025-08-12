@@ -1,0 +1,11 @@
+# Denoの公式イメージをベースにする
+FROM denoland/deno:alpine
+
+# コンテナ内の作業ディレクトリを設定
+WORKDIR /app
+
+# Denoスクリプトをコピー
+COPY ./mnemonic-generator/generate.ts ./mnemonic-generator/deno.json  ./
+
+# コンテナ起動時にスクリプトを実行するコマンド
+CMD ["deno","run","start"]
