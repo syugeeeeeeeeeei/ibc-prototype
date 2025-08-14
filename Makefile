@@ -1,48 +1,46 @@
-# .PHONY は、ファイル名とターゲット名が衝突するのを防ぐおまじないです
-.PHONY: init start up-d down down-v logs clean help
-
-# デフォルトのコマンドを 'help' に設定
+.PHONY: apply delete scale-up scale-down get-pods get-services clean help
 .DEFAULT_GOAL := help
 
-# ニーモニックを含む .env ファイルを生成するターゲット
-.env:
-	@echo "🔑 Building generator image and creating new mnemonics..."
-	@docker build -t mnemonic-generator -f ./mnemonic-generator/Dockerfile.gen .
-	@docker run --rm mnemonic-generator > ./.env
-	@echo "✅ Mnemonics generated and saved to .env file."
+# Kubernetesクラスタにマニフェストを適用し、サービスをデプロイ
+apply:
+	@echo "🚀 Applying Kubernetes manifests..."
+	@kubectl apply -f k8s/
+	@echo "✅ Deployment successful. You can now run 'make get-pods' to check the status."
 
-# 環境の完全な初期化を行うメインターゲット
-init: down-v clean .env
-	@echo "🛠️  Initializing chain data..."
-	@docker-compose run --rm init-node
-	@echo "✅ Initialization complete. You can now run 'make start'."
+# デプロイ済みのKubernetesリソースを全て削除
+delete:
+	@echo "🔥 Deleting Kubernetes resources..."
+	@kubectl delete -f k8s/
+	@echo "✅ All resources deleted."
 
-# 初期化済みの環境をバックグラウンドで起動する
-start:
-	@echo "🚀 Starting services in detached mode..."
-	@docker-compose up -d gaia-1 gaia-2 ibc-relayer
+# Gaiaノードを3つにスケールアップ
+scale-up:
+	@echo "⬆️ Scaling up Gaia nodes to 3 replicas..."
+	@kubectl scale statefulset gaia-node --replicas=3
+	@echo "✅ Gaia nodes scaled up. Run 'make get-pods' to confirm."
 
-# startコマンドのエイリアス（別名）
-up-d: start
+# Gaiaノードを2つにスケールダウン
+scale-down:
+	@echo "⬇️ Scaling down Gaia nodes to 2 replicas..."
+	@kubectl scale statefulset gaia-node --replicas=2
+	@echo "✅ Gaia nodes scaled down. Run 'make get-pods' to confirm."
 
-# コンテナを停止
-down:
-	@echo "🛑 Stopping containers..."
-	@touch .env
-	@docker-compose down
+# 全てのPodの状態を表示
+get-pods:
+	@echo "📜 Getting pod statuses..."
+	@kubectl get pods
 
-# コンテナを停止し、全データ（ボリューム）を削除
-down-v:
-	@echo "🔥 Stopping containers and removing all data..."
-	@touch .env
-	@docker-compose down -v
+# 全てのServiceの状態を表示
+get-services:
+	@echo "📜 Getting service statuses..."
+	@kubectl get services
 
-# 全コンテナのログを追跡表示
+# Gaiaノードのログを追跡表示
 logs:
-	@echo "📜 Tailing logs..."
-	@docker-compose logs -f --tail=100
+	@echo "📜 Tailing logs for all gaia-node pods..."
+	@kubectl logs -f -l app=gaia-node
 
-# 生成された .env ファイルを削除
+# 生成された.envファイルを削除
 clean:
 	@echo "🧹 Cleaning up generated files..."
 	@rm -f .env
@@ -50,10 +48,11 @@ clean:
 # ヘルプメッセージを表示
 help:
 	@echo "Usage:"
-	@echo "  make init        - (Run First) Resets everything, generates new keys, and initializes chains."
-	@echo "  make start       - Starts the services in the background (after 'make init')."
-	@echo "  make up-d        - Alias for 'make start'."
-	@echo "  make down        - Stops the services."
-	@echo "  make down-v      - Stops services and DELETES ALL DATA."
-	@echo "  make logs        - Follows the container logs."
+	@echo "  make apply       - (Run First) Applies all Kubernetes manifests to the cluster."
+	@echo "  make delete      - Deletes all Kubernetes resources defined in k8s/."
+	@echo "  make scale-up    - Scales the gaia-node StatefulSet to 3 replicas."
+	@echo "  make scale-down  - Scales the gaia-node StatefulSet to 2 replicas."
+	@echo "  make get-pods    - Shows the status of all pods."
+	@echo "  make get-services- Shows the status of all services."
+	@echo "  make logs        - Follows the container logs for all gaia-node pods."
 	@echo "  make clean       - Removes generated files."
