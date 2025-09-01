@@ -1,51 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gaia-service
+spec:
+  ports:
+  - port: 26657
+    name: rpc
+  - port: 1317
+    name: rest
+  - port: 9090
+    name: grpc
+  clusterIP: None
+  selector:
+    app: gaia
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: gaia-node
+  name: gaia
 spec:
-  serviceName: "gaia-node-service"
-  replicas: 2
   selector:
     matchLabels:
-      app: gaia-node
+      app: gaia
+  serviceName: "gaia-service"
+  replicas: REPLICAS_PLACEHOLDER
   template:
     metadata:
       labels:
-        app: gaia-node
+        app: gaia
     spec:
-      # --- Podの起動時に実行する初期化処理 ---
-      initContainers:
-      - name: init-gaia-node
-        image: ghcr.io/cosmos/gaia:v21.0.1
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          # ホスト名からノードIDを動的に取得（例: gaia-node-0 -> gaia-0）
-          CHAIN_ID="gaia-$(echo $HOSTNAME | rev | cut -d'-' -f1 | rev)"
-          
-          # ノードが既に初期化されているかチェック
-          if [ ! -f /data/$CHAIN_ID/config/genesis.json ]; then
-            echo "Initializing $CHAIN_ID..."
-            /scripts/init.sh "$CHAIN_ID" "validator" "relayer"
-          else
-            echo "$CHAIN_ID is already initialized. Skipping."
-          fi
-        volumeMounts:
-        - name: gaia-data
-          mountPath: /data
-        - name: gaia-init-script
-          mountPath: /scripts
-          
-      # --- 起動後のメインコンテナ ---
+      volumes:
+      - name: scripts
+        configMap:
+          name: gaia-scripts-config
       containers:
       - name: gaia
         image: ghcr.io/cosmos/gaia:v21.0.1
-        # ★★★ 修正点：/bin/sh -c でコマンド全体をラップして正しく実行 ★★★
         command: ["/bin/sh", "-c"]
-        args:
-        - |
-          CHAIN_ID="gaia-$(echo $HOSTNAME | rev | cut -d'-' -f1 | rev)"
-          gaiad start --home "/data/$CHAIN_ID" --grpc.address="0.0.0.0:9090" --grpc.enable=true
+        args: ["gaiad start --home /data --grpc.address=\"0.0.0.0:9090\" --grpc.enable=true"]
+        envFrom:
+        - secretRef:
+            name: gaia-mnemonics
+        volumeMounts:
+        - name: gaia-data
+          mountPath: /data
         ports:
         - containerPort: 26657
           name: rpc
@@ -53,20 +51,23 @@ spec:
           name: rest
         - containerPort: 9090
           name: grpc
+      initContainers:
+      - name: init-gaia-node
+        image: ghcr.io/cosmos/gaia:v21.0.1
+        command: ["/bin/sh", "/scripts/init.sh"]
+        envFrom:
+        - secretRef:
+            name: gaia-mnemonics
         volumeMounts:
         - name: gaia-data
           mountPath: /data
-      volumes:
-      - name: gaia-init-script
-        configMap:
-          name: gaia-init-script
-          defaultMode: 0755
-          
+        - name: scripts
+          mountPath: /scripts
   volumeClaimTemplates:
   - metadata:
       name: gaia-data
     spec:
-      accessModes: ["ReadWriteOnce"]
+      accessModes: [ "ReadWriteOnce" ]
       resources:
         requests:
           storage: 1Gi
