@@ -1,0 +1,52 @@
+services:
+  metadata-chain:
+    container_name: metadata-chain
+    build: .
+    image: datachain-image
+    restart: unless-stopped
+    # 外部から操作するためのエントリーポイントとして、このチェーンのポートは公開しておく
+    ports:
+      - "26657:26657" # RPC (Relayerや外部からのTX用)
+      - "1317:1317"   # REST API (デバッグ・クエリ用)
+      - "9090:9090"   # gRPC (デバッグ・クエリ用)
+    volumes:
+      - metadata-chain-data:/root/.datain
+      - ./scripts/ibc/00_entrypoint.sh:/usr/local/bin/entrypoint.sh
+    command: /usr/local/bin/entrypoint.sh metadata-chain uatom 1
+    # 明示的にネットワークを指定
+    networks:
+      - ibc-net
+
+  data-chain-1:
+    container_name: data-chain-1
+    image: datachain-image
+    restart: unless-stopped
+    volumes:
+      - data-chain-1-data:/root/.datain
+      - ./scripts/ibc/00_entrypoint.sh:/usr/local/bin/entrypoint.sh
+    command: /usr/local/bin/entrypoint.sh data-chain-1 uatom 2
+    networks:
+      - ibc-net
+
+  relayer:
+    container_name: relayer
+    image: ghcr.io/cosmos/relayer:v2.6.0
+    restart: unless-stopped
+    depends_on:
+      - metadata-chain
+      - data-chain-1
+    volumes:
+      - relayer-data:/home/relayer/.relayer
+    entrypoint: sleep 36000
+    networks:
+      - ibc-net
+
+# 使用するネットワークを定義
+networks:
+  ibc-net:
+    driver: bridge
+
+volumes:
+  metadata-chain-data:
+  data-chain-1-data:
+  relayer-data:
