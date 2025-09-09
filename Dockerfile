@@ -28,6 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # バージョンをより具体的に指定
 FROM alpine:3.19
 
+
 # セキュリティ向上のため、専用の非rootユーザーを作成
 RUN addgroup -S datachain && adduser -S datachain -G datachain
 
