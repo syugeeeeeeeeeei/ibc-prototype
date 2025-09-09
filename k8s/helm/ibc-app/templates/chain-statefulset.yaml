@@ -1,0 +1,62 @@
+{{- /* values.yaml の chains リストをループ処理 */}}
+{{- range .Values.chains }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  # 各チェーンの名前に基づいてStatefulSet名を設定 (例: ibc-app-gaia-0)
+  name: {{ include "ibc-app.fullname" $ }}-{{ .name }}
+spec:
+  replicas: 1
+  serviceName: {{ include "ibc-app.fullname" $ }}-{{ .name }}-headless
+  selector:
+    matchLabels:
+      {{- include "ibc-app.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: chain
+      app.kubernetes.io/instance: {{ .name }}
+  template:
+    metadata:
+      labels:
+        {{- include "ibc-app.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: chain
+        app.kubernetes.io/instance: {{ .name }}
+    spec:
+      containers:
+        - name: chain
+          {{- /* .type (datachain/metachain) に応じてイメージを動的に選択 */}}
+          {{- $chainType := index $.Values.chainTypes .type }}
+          image: "{{ $chainType.repository }}:{{ $chainType.tag }}"
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          command: ["/bin/sh", "-c", "/scripts/entrypoint-chain.sh"]
+          ports:
+            - containerPort: 26657
+              name: rpc
+            - containerPort: 9090
+              name: grpc
+            - containerPort: 1317
+              name: api
+          volumeMounts:
+            - name: data
+              mountPath: /home/datachain/.datachain
+            - name: scripts
+              mountPath: /scripts
+            - name: mnemonics
+              mountPath: /etc/datachain/mnemonic/key.mnemonic
+              subPath: {{ .name }}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ include "ibc-app.fullname" $ }}-scripts
+            defaultMode: 0755
+        - name: mnemonics
+          secret:
+            secretName: {{ include "ibc-app.fullname" $ }}-mnemonics
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ $.Values.chain.storage.size }}
+{{- end }}

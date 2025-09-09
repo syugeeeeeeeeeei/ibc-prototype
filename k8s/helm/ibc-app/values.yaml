@@ -1,0 +1,38 @@
+# =============================================================================
+# Global Settings
+# =============================================================================
+imagePullPolicy: IfNotPresent
+
+# =============================================================================
+# Chain Node Configuration
+# =============================================================================
+# デプロイしたいチェーンをリスト形式で定義します。
+# nameはk8s内で一意である必要があります。
+# typeはどのチェーンの定義(chainTypes)を使用するかを指定します。
+chains:
+  - name: gaia-0
+    type: datachain
+  - name: gaia-1
+    type: datachain
+  - name: meta-0
+    type: metachain
+
+# チェーンの「種類」ごとの設定を定義します。
+chainTypes:
+  datachain:
+    repository: datachain-image
+    tag: latest
+  metachain:
+    repository: metachain-image
+    tag: latest
+
+chain:
+  storage:
+    size: 10Gi
+
+# =============================================================================
+# Relayer Configuration
+# =============================================================================
+relayer:
+  repository: ghcr.io/cosmos/relayer
+  tag: v2.6.0
