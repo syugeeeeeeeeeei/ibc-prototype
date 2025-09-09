@@ -1,43 +1,62 @@
+version: '3.8'
+
 services:
   metadata-chain:
-    container_name: metadata-chain
+    container_name: ibc-prototype-metadata-chain
     build: .
-    image: datachain-image
+    image: datachain-image:latest
     restart: unless-stopped
-    # 外部から操作するためのエントリーポイントとして、このチェーンのポートは公開しておく
     ports:
-      - "26657:26657" # RPC (Relayerや外部からのTX用)
-      - "1317:1317"   # REST API (デバッグ・クエリ用)
-      - "9090:9090"   # gRPC (デバッグ・クエリ用)
+      - "26657:26657" # RPC
+      - "1317:1317"   # REST API
+      - "9090:9090"   # gRPC
     volumes:
-      - metadata-chain-data:/root/.datain
+      # env.shのAPP_NAME 'datachain' に合わせてマウント先を修正
+      - metadata-chain-data:/home/datachain/.datachain
       - ./scripts/ibc/00_entrypoint.sh:/usr/local/bin/entrypoint.sh
-    command: /usr/local/bin/entrypoint.sh metadata-chain uatom 1
-    # 明示的にネットワークを指定
+    command: ["/usr/local/bin/entrypoint.sh", "metadata-chain", "uatom", "1"]
     networks:
       - ibc-net
+    # RPCサーバーの起動を待つためのヘルスチェックを追加
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   data-chain-1:
-    container_name: data-chain-1
-    image: datachain-image
+    container_name: ibc-prototype-data-chain-1
+    image: datachain-image:latest
     restart: unless-stopped
     volumes:
-      - data-chain-1-data:/root/.datain
+      # env.shのAPP_NAME 'datachain' に合わせてマウント先を修正
+      - data-chain-1-data:/home/datachain/.datachain
       - ./scripts/ibc/00_entrypoint.sh:/usr/local/bin/entrypoint.sh
-    command: /usr/local/bin/entrypoint.sh data-chain-1 uatom 2
+    command: ["/usr/local/bin/entrypoint.sh", "data-chain-1", "uatom", "2"]
     networks:
       - ibc-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
 
   relayer:
-    container_name: relayer
+    container_name: ibc-prototype-relayer
     image: ghcr.io/cosmos/relayer:v2.6.0
     restart: unless-stopped
+    # 各チェーンのhealthcheckが通るまで起動を待つように設定
     depends_on:
-      - metadata-chain
-      - data-chain-1
+      metadata-chain:
+        condition: service_healthy
+      data-chain-1:
+        condition: service_healthy
     volumes:
       - relayer-data:/home/relayer/.relayer
-    entrypoint: sleep 36000
+      # (注意) このスクリプトは別途作成する必要があります
+      - ./scripts/ibc/01_init_relayer.sh:/usr/local/bin/init_relayer.sh
+    # sleepではなく、リレイヤーを初期化・起動するスクリプトを実行
+    command: ["/usr/local/bin/init_relayer.sh"]
     networks:
       - ibc-net
 
@@ -45,6 +64,7 @@ services:
 networks:
   ibc-net:
     driver: bridge
+    name: ibc-net # ネットワーク名を固定
 
 volumes:
   metadata-chain-data:
