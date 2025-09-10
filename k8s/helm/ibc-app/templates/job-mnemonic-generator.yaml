@@ -30,7 +30,7 @@ spec:
               echo "--- Generating mnemonics and creating Secret YAML for ${SECRET_NAME} ---"
 
               # --- Secretのヘッダー部分を作成 ---
-              cat <<EOF > /tmp/secret.yaml
+              cat <<EOF > ${SECRET_FILE}
               apiVersion: v1
               kind: Secret
               metadata:
