@@ -1,5 +1,5 @@
 # .PHONY: 偽のターゲットを定義
-.PHONY: help build-all build-datachain build-metachain deploy delete logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
+.PHONY: help init init-datachain init-metachain build-all build-datachain build-metachain deploy delete logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
 
 # --- 変数定義 ---
 APP_NAME ?= ibc-app
@@ -12,6 +12,40 @@ CHART_PATH ?= ./k8s/helm/$(APP_NAME)
 # =============================================================================
 # Main Commands
 # =============================================================================
+
+## init: datachainとmetachainのソースコードを初期化します
+init: init-datachain init-metachain
+
+## init-datachain: datachainのソースコードを./chain/datachainに生成します
+init-datachain:
+	@if [ -d "chain/datachain" ]; then \
+		echo "ℹ️  'chain/datachain' directory already exists. Skipping scaffolding."; \
+	else \
+		echo "✨  Scaffolding datachain..."; \
+		mkdir -p chain; \
+		cd chain; \
+		ignite scaffold chain datachain --skip-git; \
+		cd datachain; \
+		ignite scaffold module datastore --ibc --dep bank --yes; \
+		ignite scaffold packet chunk index:string data:bytes --module datastore --yes; \
+		ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes; \
+		cd ../..; \
+	fi
+
+## init-metachain: metachainのソースコードを./chain/metachainに生成します
+init-metachain:
+	@if [ -d "chain/metachain" ]; then \
+		echo "ℹ️  'chain/metachain' directory already exists. Skipping scaffolding."; \
+	else \
+		echo "✨  Scaffolding metachain..."; \
+		mkdir -p chain; \
+		cd chain; \
+		ignite scaffold chain metachain --skip-git; \
+		cd metachain; \
+		ignite scaffold module metadata --ibc --dep bank --yes; \
+		ignite scaffold packet metaData url:string addressHashes:array.string --module metadata --yes; \
+		cd ../..; \
+	fi
 
 ## build-all: 全てのチェーンのDockerイメージをビルドします
 build-all: build-datachain build-metachain

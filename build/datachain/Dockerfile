@@ -3,20 +3,14 @@
 FROM golang:1.24-alpine AS builder
 
 # ビルドに必要なパッケージをインストール
-# ▼▼▼ bash をここに追加 ▼▼▼
-RUN apk add --no-cache build-base curl bash
-
-# Ignite CLIをインストール
-RUN curl -sSfL https://get.ignite.com/cli! | bash
+RUN apk add --no-cache build-base
 
 # 作業ディレクトリを設定
 WORKDIR /app
 
-# --- datachainの雛形をDockerfile内で動的に生成する ---
-RUN ignite scaffold chain datachain --skip-git
-RUN ignite scaffold module datastore --ibc --dep bank --yes
-RUN ignite scaffold packet chunk index:string data:bytes --module datastore --yes
-RUN ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes
+# --- datachainのソースコードをコピー ---
+# ローカルのchain/datachainディレクトリをコンテナ内にコピー
+COPY ../../chain/datachain /app/datachain
 
 # Goモジュールの依存関係をダウンロード
 WORKDIR /app/datachain

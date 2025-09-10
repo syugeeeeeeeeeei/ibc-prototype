@@ -1,24 +1,15 @@
-# ベースイメージを指定
-FROM ubuntu:22.04
+# Goのビルド環境と必要なツールを準備するステージ
+FROM golang:1.24-alpine AS builder
 
-# 必要なパッケージをインストール (ここに golang を追加)
-RUN apt-get update && apt-get install -y curl
-
-ENV GO_VERSION=1.24.0
-RUN curl -L "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xz
-ENV PATH="/usr/local/go/bin:${PATH}"
-
-# Ignite CLIをインストール
-RUN curl -sSfL https://get.ignite.com/cli! | bash
+# ビルドに必要なパッケージをインストール
+RUN apk add --no-cache build-base
 
 # 作業ディレクトリを設定
 WORKDIR /app
 
-# --- metachainの雛形をDockerfile内で動的に生成する ---
-RUN ignite scaffold chain metachain --skip-git
-RUN ignite scaffold module metadata --ibc --dep bank --yes
-# 要求されたデータ構造 {url:string, address_hash:string[]} を持つIBCパケットを作成
-RUN ignite scaffold packet metaData url:string addressHashes:array.string --module metadata --yes
+# --- metachainのソースコードをコピー ---
+# ローカルのchain/metachainディレクトリをコンテナ内にコピー
+COPY ../../chain/metachain /app/metachain
 
 # Goモジュールの依存関係をダウンロード
 WORKDIR /app/metachain
