@@ -57,9 +57,6 @@ spec:
               rly chains add --file ${TMP_JSON_FILE}
 
               echo "--> Generating mnemonic for ${CHAIN_NAME}..."
-              # ★★★★★★★★★★★★★★★★★★★★★★★
-              # ★★★ 修正箇所 ★★★
-              # ★★★★★★★★★★★★★★★★★★★★★★★
               # `rly keys add` のJSON出力を `jq` でパースし、ニーモニックのみを抽出する
               OUTPUT=$(rly keys add ${CHAIN_NAME} tmp-key 2>&1)
               echo "Full output from 'rly keys add':"
