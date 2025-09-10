@@ -15,7 +15,7 @@ if [ -d "${APP_NAME}" ]; then
 fi
 
 echo "--> ⛓️   Step 1/5: Scaffolding base chain: '${APP_NAME}'..."
-ignite scaffold chain "${APP_NAME}" --skip-git
+ignite scaffold chain "${APP_NAME}" --skip-git --no-module
 echo "--> ✅ Done."
 
 cd "${APP_NAME}"
