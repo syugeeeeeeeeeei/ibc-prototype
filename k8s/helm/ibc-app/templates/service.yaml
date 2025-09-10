@@ -14,5 +14,5 @@ spec:
       port: 1317
   # このラベルを持つPodをサービスの対象とする
   selector:
-    {{- include "ibc-app.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ include "ibc-app.name" . }}
     app.kubernetes.io/component: chain

@@ -26,6 +26,8 @@ spec:
             - name: CHAIN_NAMES_CSV
               # "data-0,data-1,..." のようなCSV文字列を動的に生成
               value: {{ range $i, $chain := .Values.chains }}{{ if $i }},{{ end }}{{ $chain.name }}{{ end }}
+            - name: RELEASE_NAME
+              value: {{ .Release.Name | quote }}
           volumeMounts:
             - name: scripts
               mountPath: /scripts

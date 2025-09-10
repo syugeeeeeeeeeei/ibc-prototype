@@ -6,23 +6,24 @@ kind: StatefulSet
 metadata:
   name: {{ include "ibc-app.fullname" $ }}-{{ .name }}
 spec:
+  serviceName: {{ include "ibc-app.fullname" $ }}-chain-headless
   replicas: 1
-  serviceName: {{ include "ibc-app.fullname" $ }}-{{ .name }}-headless
   selector:
     matchLabels:
       {{- include "ibc-app.selectorLabels" $ | nindent 6 }}
       app.kubernetes.io/component: chain
+      # ★★★ 修正箇所 (1/2): instance ラベルを {{ .name }} に変更 ★★★
       app.kubernetes.io/instance: {{ .name }}
   template:
     metadata:
       labels:
         {{- include "ibc-app.selectorLabels" $ | nindent 8 }}
         app.kubernetes.io/component: chain
+        # ★★★ 修正箇所 (2/2): こちらも同様に {{ .name }} に変更 ★★★
         app.kubernetes.io/instance: {{ .name }}
     spec:
       containers:
         - name: chain
-          {{- /* .type (datachain/metachain) に応じてイメージを動的に選択 */}}
           {{- $chainType := index $.Values.chainTypes .type }}
           image: "{{ $chainType.repository }}:{{ $chainType.tag }}"
           imagePullPolicy: Never
@@ -30,7 +31,6 @@ spec:
           env:
             - name: CHAIN_APP_NAME
               value: {{ .type | quote }}
-            # ★★★ 修正箇所 (1/2): 環境変数を追加 ★★★
             - name: CHAIN_INSTANCE_NAME
               value: {{ .name | quote }}
           ports:
@@ -45,7 +45,6 @@ spec:
               mountPath: /home/{{ .type }}/.{{ .type }}
             - name: scripts
               mountPath: /scripts
-            # ★★★ 修正箇所 (2/2): マウント方法を変更 ★★★
             - name: mnemonics
               mountPath: /etc/mnemonics
       volumes:
