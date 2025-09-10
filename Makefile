@@ -1,5 +1,5 @@
 # .PHONY: 偽のターゲットを定義
-.PHONY: help init init-datachain init-metachain build-all build-datachain build-metachain deploy delete logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
+.PHONY: help build-all build-datachain build-metachain deploy delete logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
 
 # --- 変数定義 ---
 APP_NAME ?= ibc-app
@@ -12,21 +12,6 @@ CHART_PATH ?= ./k8s/helm/$(APP_NAME)
 # =============================================================================
 # Main Commands
 # =============================================================================
-
-## init: datachainとmetachainのソースコードを初期化します
-init: init-datachain init-metachain
-
-## init-datachain: datachainのソースコードを./chain/datachainに生成します
-init-datachain:
-	@echo "▶️  datachain生成スクリプトを実行します..."
-	@chmod +x ./scripts/create-datachain.sh
-	@./scripts/create-datachain.sh
-
-## init-metachain: metachainのソースコードを./chain/metachainに生成します
-init-metachain:
-	@echo "▶️  metachain生成スクリプトを実行します..."
-	@chmod +x ./scripts/create-metachain.sh
-	@./scripts/create-metachain.sh
 
 ## build-all: 全てのチェーンのDockerイメージをビルドします
 build-all: build-datachain build-metachain

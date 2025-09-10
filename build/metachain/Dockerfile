@@ -1,24 +1,37 @@
+# --- ビルダーステージ ---
 # Goのビルド環境と必要なツールを準備するステージ
-FROM golang:1.24-alpine AS builder
+FROM ubuntu:22.04 AS builder
 
 # ビルドに必要なパッケージをインストール
-RUN apk add --no-cache build-base
+# GoとIgnite CLIのインストールに必要なツールをまとめる
+RUN apt-get update && apt-get install -y curl git make && rm -rf /var/lib/apt/lists/*
+
+# Goをインストール
+ENV GO_VERSION=1.24.6
+RUN curl -L "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Ignite CLIをインストール
+RUN curl -sSfL https://get.ignite.com/cli! | bash
+ENV PATH="/root/go/bin:${PATH}"
 
 # 作業ディレクトリを設定
 WORKDIR /app
 
-# --- metachainのソースコードをコピー ---
-# ローカルのchain/metachainディレクトリをコンテナ内にコピー
-COPY ../../chain/metachain /app/metachain
-
-# Goモジュールの依存関係をダウンロード
+# --- datachainの雛形をDockerfile内で動的に生成する ---
+RUN ignite scaffold chain metachain --skip-git --no-module
 WORKDIR /app/metachain
-RUN go mod download
+RUN mkdir -p ./proto && \
+	echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml
+RUN ignite scaffold module metastore --ibc --dep bank --yes
+RUN ignite scaffold packet metadata url:string addresses:array.string --module metastore --yes
+RUN ignite scaffold map stored-meta url:string --module metastore --signer creator --yes
 
-# --- metachaind バイナリをビルド ---
-RUN CGO_ENABLED=0 GOOS=linux go build \
-	-ldflags="-w -s" \
-	-o /bin/metachaind ./cmd/metachaind
+# --- datachaind バイナリをビルド ---
+# ignite chain build コマンドは $GOPATH/bin にバイナリを生成する
+# この場合、コンテナ内のGoのデフォルトのGOPATHは /root/go であるため、
+# バイナリは /root/go/bin/datachaind に生成される
+RUN ignite chain build
 
 # --- 最終ステージ ---
 # 実行に必要な最小限の環境を構築するステージ
@@ -27,10 +40,10 @@ FROM alpine:3.19
 # セキュリティ向上のため、専用の非rootユーザーを作成
 RUN addgroup -S metachain && adduser -S metachain -G metachain
 
-# ビルダーステージからコンパイル済みのバイナリのみをコピー
-COPY --from=builder /bin/metachaind /usr/bin/metachaind
+# パスを /root/go/bin/datachaind に修正
+COPY --from=builder /root/go/bin/metachaind /usr/bin/metachaind
 
-# metachaind を実行ユーザーに実行権限を付与
+# datachaind を実行ユーザーに実行権限を付与
 RUN chmod +x /usr/bin/metachaind
 
 # ユーザーを切り替え
