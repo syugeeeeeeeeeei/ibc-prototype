@@ -1,12 +1,13 @@
 # --- ビルダーステージ ---
 # Goのビルド環境と必要なツールを準備するステージ
-FROM golang:1.21.9-alpine3.19 AS builder
+FROM golang:1.24-alpine AS builder
 
-# ビルドに必要なパッケージ (curl) をインストール
-RUN apk add --no-cache build-base curl
+# ビルドに必要なパッケージをインストール
+# ▼▼▼ bash をここに追加 ▼▼▼
+RUN apk add --no-cache build-base curl bash
 
 # Ignite CLIをインストール
-RUN curl https://get.ignite.com/cli! | bash
+RUN curl -sSfL https://get.ignite.com/cli! | bash
 
 # 作業ディレクトリを設定
 WORKDIR /app

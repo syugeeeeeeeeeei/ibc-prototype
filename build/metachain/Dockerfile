@@ -1,12 +1,15 @@
-# --- ビルダーステージ ---
-# Goのビルド環境と必要なツールを準備するステージ
-FROM golang:1.21.9-alpine3.19 AS builder
+# ベースイメージを指定
+FROM ubuntu:22.04
 
-# ビルドに必要なパッケージ (curl) をインストール
-RUN apk add --no-cache build-base curl
+# 必要なパッケージをインストール (ここに golang を追加)
+RUN apt-get update && apt-get install -y curl
+
+ENV GO_VERSION=1.24.0
+RUN curl -L "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xz
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Ignite CLIをインストール
-RUN curl https://get.ignite.com/cli! | bash
+RUN curl -sSfL https://get.ignite.com/cli! | bash
 
 # 作業ディレクトリを設定
 WORKDIR /app
