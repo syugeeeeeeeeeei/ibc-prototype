@@ -2,41 +2,64 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "ibc-app.fullname" . }}-mnemonic-generator
+  namespace: {{ .Release.Namespace }}
   annotations:
-    # install/upgrade前にこのJobを実行する
     "helm.sh/hook": "pre-install,pre-upgrade"
-    # Jobが成功したら自動で削除する
-    "helm.sh/hook-delete-policy": "hook-succeeded"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "0"
 spec:
   template:
     spec:
-      # このJob専用のServiceAccount (後述)
-      serviceAccountName: {{ include "ibc-app.fullname" . }}-mnemonic-generator
+      serviceAccountName: {{ include "ibc-app.fullname" . }}-sa
       restartPolicy: Never
       containers:
         - name: generator
-          # 実際には、ニーモニック生成ツールとkubectlを含む軽量なイメージを使用
-          image: alpine/k8s:1.29.3
+          # ★★★ 修正箇所 ★★★
+          # bitnami/kubectl から、上記でビルドしたカスタムイメージに変更
+          # values.yamlなどでイメージ名を指定できるようにするのが望ましい
+          image: "{{ .Values.relayer.repository }}:{{ .Values.relayer.tag }}"
+          imagePullPolicy: {{ .Values.relayer.pullPolicy }}
           command:
             - /bin/sh
             - -c
             - |
-              echo "--- Generating mnemonics and creating Secret ---"
-              # 1. SecretのYAMLマニフェストを動的に生成する
+              set -e
+              SECRET_NAME="{{ include "ibc-app.fullname" . }}-mnemonics"
+              SECRET_FILE="/tmp/secret.yaml"
+
+              echo "--- Generating mnemonics and creating Secret YAML for ${SECRET_NAME} ---"
+
+              # --- Secretのヘッダー部分を作成 ---
               cat <<EOF > /tmp/secret.yaml
               apiVersion: v1
               kind: Secret
               metadata:
-                name: {{ include "ibc-app.fullname" . }}-mnemonics
+                name: ${SECRET_NAME}
+                namespace: {{ .Release.Namespace }}
               type: Opaque
-              data:
-              {{- range .Values.chains }}
-                {{ .name }}.mnemonic: $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20 | base64) # 仮のニーモニック生成ロジック
-              {{- end }}
+              stringData:
               EOF
 
-              # 2. 生成したSecretをクラスタに適用する
-              # 既存のSecretがある場合は上書き(replace)する
-              kubectl apply -f /tmp/secret.yaml --force
-              echo "--- Secret created successfully ---"
+              # --- 各チェーンのニーモニックを生成し、Secretファイルに追記 ---
+              {{- range .Values.chains }}
+              echo "--> Generating mnemonic for {{ .name }}..."
+              # `rly keys add` を実行し、出力の最終行（ニーモニック）のみを抽出
+              MNEMONIC=$(rly keys add {{ .name }} tmp-key --keyring-backend test | tail -n 1)
+
+              # 抽出したニーモニックをYAML形式で追記
+              # 注意:インデントが重要です
+              cat <<EOF >> ${SECRET_FILE}
+                {{ .name }}.mnemonic: "${MNEMONIC}"
+              EOF
+              {{- end }}
+
+              echo "--- Generated Secret content: ---"
+              cat ${SECRET_FILE}
+              echo "---------------------------------"
+
+              echo "--- Applying Secret to the cluster ---"
+              # --force は古いSecretが存在する場合に更新を強制する
+              kubectl apply -f ${SECRET_FILE}
+
+              echo "--- Secret '${SECRET_NAME}' created/updated successfully ---"
   backoffLimit: 1

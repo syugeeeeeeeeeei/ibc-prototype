@@ -1,35 +1,39 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "ibc-app.fullname" . }}-mnemonic-generator
-  # HelmのHookリソースとして扱うためのアノテーション
+  name: {{ include "ibc-app.fullname" . }}-sa
+  namespace: {{ .Release.Namespace }}
   annotations:
     "helm.sh/hook": "pre-install,pre-upgrade"
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "-5" # Jobより先に作成されるようにウェイトを設定
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: {{ include "ibc-app.fullname" . }}-secret-manager
+  name: {{ include "ibc-app.fullname" . }}-secret-manager-crole
   annotations:
     "helm.sh/hook": "pre-install,pre-upgrade"
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "-5" # Jobより先に作成されるようにウェイトを設定
 rules:
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["create", "get", "update", "patch", "delete"] # Secretを作成・更新・削除する権限
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
-  name: {{ include "ibc-app.fullname" . }}-secret-manager-binding
+  name: {{ include "ibc-app.fullname" . }}-secret-manager-crbinding
   annotations:
     "helm.sh/hook": "pre-install,pre-upgrade"
     "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    "helm.sh/hook-weight": "-5" # Jobより先に作成されるようにウェイトを設定
 subjects:
 - kind: ServiceAccount
-  name: {{ include "ibc-app.fullname" . }}-mnemonic-generator
+  name: {{ include "ibc-app.fullname" . }}-sa
+  namespace: {{ .Release.Namespace }}
 roleRef:
-  kind: Role
-  name: {{ include "ibc-app.fullname" . }}-secret-manager
+  kind: ClusterRole
+  name: {{ include "ibc-app.fullname" . }}-secret-manager-crole
   apiGroup: rbac.authorization.k8s.io

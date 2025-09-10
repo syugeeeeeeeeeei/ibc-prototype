@@ -1,5 +1,5 @@
 # .PHONY: 偽のターゲットを定義
-.PHONY: help build-all build-datachain build-metachain deploy delete logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
+.PHONY: help build-all build-datachain build-metachain build-relayer deploy delete delete-force logs logs-chain logs-relayer status portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
 
 # --- 変数定義 ---
 APP_NAME ?= ibc-app
@@ -14,7 +14,7 @@ CHART_PATH ?= ./k8s/helm/$(APP_NAME)
 # =============================================================================
 
 ## build-all: 全てのチェーンのDockerイメージをビルドします
-build-all: build-datachain build-metachain
+build-all: build-datachain build-metachain build-relayer
 
 ## build-datachain: datachainのDockerイメージをビルドします
 build-datachain:
@@ -26,15 +26,27 @@ build-metachain:
 	@echo "🏗️  Building metachain image from definition..."
 	@docker build -t metachain-image:latest -f ./build/metachain/Dockerfile .
 
+## build-metachain: metachainのDockerイメージをビルドします
+build-relayer:
+	@echo "🏗️  Building relayer image from definition..."
+	@docker build -t relayer-image:latest -f ./build/relayer/Dockerfile .
+
 ## deploy: HelmチャートをKubernetesクラスタにデプロイします
 deploy:
 	@echo "🚀  Deploying Helm chart to cluster..."
-	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) --wait
+	@helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) --debug
 
-## delete: Kubernetesクラスタからデプロイを削除します
+## delete: デプロイのみを削除します (ボリュームは残ります)
 delete:
+	@echo "🔥  Deleting Helm release (volumes will be kept)..."
+	@helm uninstall $(RELEASE_NAME) --ignore-not-found=true
+
+## delete-force: デプロイとボリューム(PVC)を完全に削除します
+delete-force:
 	@echo "🔥  Deleting Helm release from cluster..."
-	@helm uninstall $(RELEASE_NAME)
+	@helm uninstall $(RELEASE_NAME) --ignore-not-found=true
+	@echo "🧹  Deleting Persistent Volume Claims (PVCs)..."
+	@kubectl delete pvc -l "app.kubernetes.io/name=$(APP_NAME)" --ignore-not-found=true
 
 # =============================================================================
 # Utility Commands

@@ -4,7 +4,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  # 各チェーンの名前に基づいてStatefulSet名を設定 (例: ibc-app-gaia-0)
+  # 各チェーンの名前に基づいてStatefulSet名を設定 (例: ibc-app-data-9)
   name: {{ include "ibc-app.fullname" $ }}-{{ .name }}
 spec:
   replicas: 1
@@ -26,8 +26,13 @@ spec:
           {{- /* .type (datachain/metachain) に応じてイメージを動的に選択 */}}
           {{- $chainType := index $.Values.chainTypes .type }}
           image: "{{ $chainType.repository }}:{{ $chainType.tag }}"
-          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          imagePullPolicy: Never
           command: ["/bin/sh", "-c", "/scripts/entrypoint-chain.sh"]
+          # --- 修正箇所 開始 ---
+          env:
+            - name: CHAIN_APP_NAME
+              value: {{ .type | quote }} # "datachain" や "metachain" を環境変数として設定
+          # --- 修正箇所 終了 ---
           ports:
             - containerPort: 26657
               name: rpc
@@ -37,11 +42,15 @@ spec:
               name: api
           volumeMounts:
             - name: data
-              mountPath: /home/datachain/.datachain
+              # --- 修正箇所 開始 ---
+              mountPath: /home/{{ .type }}/.{{ .type }}
+              # --- 修正箇所 終了 ---
             - name: scripts
               mountPath: /scripts
             - name: mnemonics
-              mountPath: /etc/datachain/mnemonic/key.mnemonic
+              # --- 修正箇所 開始 ---
+              mountPath: /etc/mnemonic/key.mnemonic # パスを汎用化
+              # --- 修正箇所 終了 ---
               subPath: {{ .name }}
       volumes:
         - name: scripts

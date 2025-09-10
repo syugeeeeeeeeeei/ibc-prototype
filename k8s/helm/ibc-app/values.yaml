@@ -10,9 +10,9 @@ imagePullPolicy: IfNotPresent
 # nameはk8s内で一意である必要があります。
 # typeはどのチェーンの定義(chainTypes)を使用するかを指定します。
 chains:
-  - name: gaia-0
+  - name: data-0
     type: datachain
-  - name: gaia-1
+  - name: data-1
     type: datachain
   - name: meta-0
     type: metachain
@@ -34,5 +34,6 @@ chain:
 # Relayer Configuration
 # =============================================================================
 relayer:
-  repository: ghcr.io/cosmos/relayer
-  tag: v2.6.0
+  repository: relayer-image
+  tag: latest
+  pullPolicy: IfNotPresent
