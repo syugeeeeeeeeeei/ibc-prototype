@@ -14,22 +14,27 @@ spec:
       restartPolicy: Never
       containers:
         - name: generator
-          # ★★★ 修正箇所 ★★★
-          # bitnami/kubectl から、上記でビルドしたカスタムイメージに変更
-          # values.yamlなどでイメージ名を指定できるようにするのが望ましい
           image: "{{ .Values.relayer.repository }}:{{ .Values.relayer.tag }}"
           imagePullPolicy: {{ .Values.relayer.pullPolicy }}
           command:
             - /bin/sh
             - -c
             - |
-              set -e
+              set -exo pipefail
+
               SECRET_NAME="{{ include "ibc-app.fullname" . }}-mnemonics"
               SECRET_FILE="/tmp/secret.yaml"
+              RELAYER_HOME="/home/relayer/.relayer"
+
+              mkdir -p ${RELAYER_HOME}
+
+              echo "--- Initializing rly config ---"
+              if [ ! -f "${RELAYER_HOME}/config/config.yaml" ]; then
+                  rly config init --home ${RELAYER_HOME}
+              fi
 
               echo "--- Generating mnemonics and creating Secret YAML for ${SECRET_NAME} ---"
 
-              # --- Secretのヘッダー部分を作成 ---
               cat <<EOF > ${SECRET_FILE}
               apiVersion: v1
               kind: Secret
@@ -40,16 +45,35 @@ spec:
               stringData:
               EOF
 
-              # --- 各チェーンのニーモニックを生成し、Secretファイルに追記 ---
               {{- range .Values.chains }}
-              echo "--> Generating mnemonic for {{ .name }}..."
-              # `rly keys add` を実行し、出力の最終行（ニーモニック）のみを抽出
-              MNEMONIC=$(rly keys add {{ .name }} tmp-key --keyring-backend test | tail -n 1)
+              CHAIN_NAME="{{ .name }}"
+              TMP_JSON_FILE="/tmp/${CHAIN_NAME}.json"
 
-              # 抽出したニーモニックをYAML形式で追記
-              # 注意:インデントが重要です
+              echo "--> Adding dummy chain config for ${CHAIN_NAME}..."
+              cat <<EOT > ${TMP_JSON_FILE}
+              {"type":"cosmos","value":{"key":"tmp-key","chain-id":"${CHAIN_NAME}","rpc-addr":"http://localhost:26657","grpc-addr":"http://localhost:9090","account-prefix":"cosmos","keyring-backend":"test","gas-adjustment":1.5,"gas-prices":"0.025uatom","debug":false,"timeout":"20s","output-format":"json","sign-mode":"direct"}}
+              EOT
+
+              rly chains add --file ${TMP_JSON_FILE}
+
+              echo "--> Generating mnemonic for ${CHAIN_NAME}..."
+              # ★★★★★★★★★★★★★★★★★★★★★★★
+              # ★★★ 修正箇所 ★★★
+              # ★★★★★★★★★★★★★★★★★★★★★★★
+              # `rly keys add` のJSON出力を `jq` でパースし、ニーモニックのみを抽出する
+              OUTPUT=$(rly keys add ${CHAIN_NAME} tmp-key 2>&1)
+              echo "Full output from 'rly keys add':"
+              echo "${OUTPUT}"
+              MNEMONIC=$(echo "${OUTPUT}" | jq -r '.mnemonic')
+
+              # ニーモニックが空でないことを確認
+              if [ -z "${MNEMONIC}" ]; then
+                echo "Error: Failed to extract mnemonic for ${CHAIN_NAME}."
+                exit 1
+              fi
+
               cat <<EOF >> ${SECRET_FILE}
-                {{ .name }}.mnemonic: "${MNEMONIC}"
+                ${CHAIN_NAME}.mnemonic: "${MNEMONIC}"
               EOF
               {{- end }}
 
@@ -58,7 +82,6 @@ spec:
               echo "---------------------------------"
 
               echo "--- Applying Secret to the cluster ---"
-              # --force は古いSecretが存在する場合に更新を強制する
               kubectl apply -f ${SECRET_FILE}
 
               echo "--- Secret '${SECRET_NAME}' created/updated successfully ---"

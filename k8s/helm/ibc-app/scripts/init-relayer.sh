@@ -91,8 +91,15 @@ echo "--- Waiting for funds to be available on all chains... ---"
 for CHAIN_ID in $CHAIN_IDS; do
     echo "--> Checking balance for $CHAIN_ID"
     while true; do
-        # rly q balanceはエラー時にnon-zeroでexitするため `|| true` をつける
-        balance=$(rly q balance "$CHAIN_ID" --denom "$DENOM" 2>/dev/null | awk '{print $1}' || echo "0")
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★★★ 修正箇所 ★★★
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★
+        # `sed` を使って数値以外の文字を削除し、純粋な数字のみを抽出する
+        balance=$(rly q balance "$CHAIN_ID" --denom "$DENOM" 2>/dev/null | sed 's/[^0-9]*//g' || echo "0")
+        
+        # 念のため、balanceが空文字の場合に0を代入する
+        balance=${balance:-0}
+        
         if [ "$balance" -gt 0 ]; then
             echo "--> Funds are available on $CHAIN_ID: $balance$DENOM"
             break
