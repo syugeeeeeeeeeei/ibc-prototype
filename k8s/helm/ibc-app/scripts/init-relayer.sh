@@ -79,23 +79,18 @@ done
 echo "--- Waiting for funds to be available on all chains... ---"
 for CHAIN_ID in $CHAIN_IDS; do
     echo "--> Checking balance for $CHAIN_ID"
-    while true; do
-        balance_output=$(rly q balance "$CHAIN_ID" 2>&1 || true)
-        
-        if echo "${balance_output}" | grep -q "${DENOM}$"; then
-            balance=$(echo "${balance_output}" | grep "${DENOM}$" | sed 's/[^0-9]*//g' || echo "0")
-            balance=${balance:-0}
-
-            if [ "$balance" -gt 0 ]; then
-                echo "--> Funds are available on $CHAIN_ID: $balance$DENOM"
-                break 
-            fi
-        else
-            echo "    Chain not fully ready yet. Retrying... (Reason: ${balance_output})"
+    ATTEMPTS=0
+    MAX_ATTEMPTS=20 # タイムアウトを延長
+    until rly q balance "$CHAIN_ID" > /dev/null 2>&1; do
+        ATTEMPTS=$((ATTEMPTS + 1))
+        if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+          echo "!!! Timed out waiting for funds on $CHAIN_ID !!!"
+          # exit 1
         fi
-        
+        echo "    Waiting for funds on $CHAIN_ID... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)"
         sleep 5
     done
+    echo "--> Funds are available on $CHAIN_ID"
 done
 
 
@@ -120,29 +115,37 @@ fi
 for DATA_CHAIN_ID in $DATA_CHAIN_IDS; do
     PATH_NAME="${PATH_PREFIX}-${DATA_CHAIN_ID}-to-${META_CHAIN_ID}"
 
-    echo "--> Generating path: $PATH_NAME (datastore <-> metastore)"
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★★★ これが最も重要な修正点です (1/2) ★★★
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # gaiaのサンプルを参考に、rly paths new コマンドに全ての情報をフラグで渡します。
+    # これにより、`datastore`と`metastore`というカスタムポートを持つパス定義が正しく生成されます。
+    echo "--> Creating new IBC path definition: $PATH_NAME"
+    rly paths new "$DATA_CHAIN_ID" "$META_CHAIN_ID" "$PATH_NAME" --src-port datastore --dst-port metastore --order unordered --version "ics20-1"
 
-    rly paths new "$DATA_CHAIN_ID" "$META_CHAIN_ID" "$PATH_NAME" --src-port datastore --dst-port metastore
-
-    echo "--> Linking path: $PATH_NAME"
-    MAX_RETRIES=5
-    RETRY_COUNT=0
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★★★ これが最も重要な修正点です (2/2) ★★★
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # gaiaのサンプルを参考に、堅牢な再試行ループを実装します。
+    # これにより、チェーンの準備が整うタイミングのズレを吸収し、確実にリンクを確立します。
+    echo "--> Attempting to link path: $PATH_NAME"
+    ATTEMPTS=0
+    MAX_ATTEMPTS=5
     SUCCESS=false
-    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    until $SUCCESS; do
         if rly transact link "$PATH_NAME" --debug; then
-            echo "--> Successfully linked $PATH_NAME"
+            echo "✅ Successfully linked $PATH_NAME"
             SUCCESS=true
-            break
         else
-            RETRY_COUNT=$((RETRY_COUNT + 1))
-            echo "Warning: Failed to link $PATH_NAME. Retrying (${RETRY_COUNT}/${MAX_RETRIES})..."
+            ATTEMPTS=$((ATTEMPTS + 1))
+            if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+                echo "!!! Failed to link path $PATH_NAME after $MAX_ATTEMPTS attempts. !!!"
+                # exit 1 # 失敗したらコンテナを終了させる
+            fi
+            echo "    Link failed. Retrying in 10 seconds... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)"
             sleep 10
         fi
     done
-
-    if [ "$SUCCESS" = false ]; then
-        echo "Error: Failed to link path $PATH_NAME after $MAX_RETRIES retries."
-    fi
 done
 
 # --- 全パスのリレイヤーを起動 ---

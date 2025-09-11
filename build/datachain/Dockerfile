@@ -19,7 +19,7 @@ ENV PATH="/root/go/bin:${PATH}"
 WORKDIR /app
 
 # --- datachainの雛形をDockerfile内で動的に生成する ---
-RUN ignite scaffold chain datachain --skip-git --no-module
+RUN ignite scaffold chain datachain --skip-git --default-denom uatom --skip-proto
 WORKDIR /app/datachain
 RUN mkdir -p ./proto && \
 	echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml

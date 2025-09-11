@@ -15,7 +15,7 @@ if [ ! -d "$CHAIN_HOME/config" ]; then
     echo "--- Initializing chain: $CHAIN_ID (type: $CHAIN_APP_NAME) ---"
 
     $CHAIN_BINARY init "$CHAIN_ID" --chain-id "$CHAIN_ID" --home "$CHAIN_HOME"
-    sed -i "s/\"stake\"/\"$DENOM\"/g" "$CHAIN_HOME/config/genesis.json"
+    # sed -i "s/\"stake\"/\"$DENOM\"/g" "$CHAIN_HOME/config/genesis.json"
 
     SHARED_MNEMONIC=$(cat "$MNEMONIC_FILE")
     
