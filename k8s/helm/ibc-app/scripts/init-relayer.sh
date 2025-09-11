@@ -80,23 +80,17 @@ echo "--- Waiting for funds to be available on all chains... ---"
 for CHAIN_ID in $CHAIN_IDS; do
     echo "--> Checking balance for $CHAIN_ID"
     while true; do
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★
-        # ★★★ これが最も重要な修正点です ★★★
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★
-        # `rly q balance`を実行し、エラーも含めて出力をキャプチャ
         balance_output=$(rly q balance "$CHAIN_ID" 2>&1 || true)
         
-        # 正常に残高が取得できたかチェック
         if echo "${balance_output}" | grep -q "${DENOM}$"; then
             balance=$(echo "${balance_output}" | grep "${DENOM}$" | sed 's/[^0-9]*//g' || echo "0")
             balance=${balance:-0}
 
             if [ "$balance" -gt 0 ]; then
                 echo "--> Funds are available on $CHAIN_ID: $balance$DENOM"
-                break # 成功したのでループを抜ける
+                break 
             fi
         else
-            # 正常な応答ではない場合、一時的なエラーか表示して待機を続ける
             echo "    Chain not fully ready yet. Retrying... (Reason: ${balance_output})"
         fi
         
@@ -105,18 +99,30 @@ for CHAIN_ID in $CHAIN_IDS; do
 done
 
 
-# --- 全チェーン間のIBCパスを総当たりで作成・接続 ---
-echo "--- Creating and linking all IBC paths ---"
-CHAIN_IDS_ARRAY=($CHAIN_IDS)
-for (( i=0; i<${#CHAIN_IDS_ARRAY[@]}; i++ )); do
-  for (( j=i+1; j<${#CHAIN_IDS_ARRAY[@]}; j++ )); do
-    CHAIN1_ID=${CHAIN_IDS_ARRAY[$i]}
-    CHAIN2_ID=${CHAIN_IDS_ARRAY[$j]}
-    PATH_NAME="${PATH_PREFIX}-${CHAIN1_ID}-to-${CHAIN2_ID}"
+# --- アプリケーション固有のIBCパスを作成・接続 ---
+echo "--- Creating and linking application-specific IBC paths ---"
 
-    echo "--> Creating path: $PATH_NAME"
-    # rly v2.6.0 では --src-port と --dst-port が非推奨になったため、port transfer を使用
-    rly paths new "$CHAIN1_ID" "$CHAIN2_ID" "$PATH_NAME" --port transfer --version ics20-1
+META_CHAIN_ID=""
+DATA_CHAIN_IDS=""
+for CHAIN_ID in $CHAIN_IDS; do
+  if [[ $CHAIN_ID == meta-* ]]; then
+    META_CHAIN_ID=$CHAIN_ID
+  else
+    DATA_CHAIN_IDS="$DATA_CHAIN_IDS $CHAIN_ID"
+  fi
+done
+
+if [ -z "$META_CHAIN_ID" ]; then
+  echo "Error: No 'meta' chain found in CHAIN_NAMES_CSV."
+  exit 1
+fi
+
+for DATA_CHAIN_ID in $DATA_CHAIN_IDS; do
+    PATH_NAME="${PATH_PREFIX}-${DATA_CHAIN_ID}-to-${META_CHAIN_ID}"
+
+    echo "--> Generating path: $PATH_NAME (datastore <-> metastore)"
+
+    rly paths new "$DATA_CHAIN_ID" "$META_CHAIN_ID" "$PATH_NAME" --src-port datastore --dst-port metastore
 
     echo "--> Linking path: $PATH_NAME"
     MAX_RETRIES=5
@@ -137,7 +143,6 @@ for (( i=0; i<${#CHAIN_IDS_ARRAY[@]}; i++ )); do
     if [ "$SUCCESS" = false ]; then
         echo "Error: Failed to link path $PATH_NAME after $MAX_RETRIES retries."
     fi
-  done
 done
 
 # --- 全パスのリレイヤーを起動 ---

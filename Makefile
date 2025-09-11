@@ -21,17 +21,14 @@ build-all: build-datachain build-metachain build-relayer
 build-datachain:
 	@echo "🏗️  Building datachain image from definition..."
 	@docker build -t datachain-image:latest -f ./build/datachain/Dockerfile .
-
 ## build-metachain: metachainのDockerイメージをビルドします
 build-metachain:
 	@echo "🏗️  Building metachain image from definition..."
 	@docker build -t metachain-image:latest -f ./build/metachain/Dockerfile .
-
 ## build-relayer: relayerのDockerイメージをビルドします
 build-relayer:
 	@echo "🏗️  Building relayer image from definition..."
 	@docker build -t relayer-image:latest -f ./build/relayer/Dockerfile .
-
 ## deploy: HelmチャートをKubernetesクラスタにデプロイします
 deploy:
 	@echo "🚀  Deploying Helm chart to cluster..."
@@ -69,7 +66,8 @@ logs-chain:
 ## logs-relayer: リレイヤーのPodのログを追跡表示します
 logs-relayer:
 	@echo "📜  Tailing logs for relayer..."
-	@kubectl logs -l "app.kubernetes.io/name=$(APP_NAME),app.kubernetes.io/component=relayer" -f --tail=100
+	@kubectl logs \
+-l "app.kubernetes.io/name=$(APP_NAME),app.kubernetes.io/component=relayer" -f --tail=100
 
 ## debug-info: 問題発生時に全ての関連情報を一括で表示します
 debug-info:
@@ -84,17 +82,17 @@ debug-info:
 		kubectl logs $$RELAYER_POD; \
 		echo "\n--- 4. DNS Resolution Test from Relayer Pod ---"; \
 		CHAIN_PODS=$$(\
-			kubectl get pods -l "app.kubernetes.io/instance=$(RELEASE_NAME),app.kubernetes.io/component=chain" -o jsonpath='{.items[*].metadata.name}' \
+			kubectl get pods -l "app.kubernetes.io/name=$(APP_NAME),app.kubernetes.io/component=chain" -o jsonpath='{.items[*].metadata.name}' \
 		); \
 		for POD_NAME in $$CHAIN_PODS; do \
 			echo "\n--> Checking DNS for $$POD_NAME..."; \
-			kubectl exec -i $$RELAYER_POD -- nslookup $$POD_NAME.$(HEADLESS_SERVICE_NAME); \
+			kubectl exec -i $$RELAYER_POD -- nslookup $$POD_NAME.$(HEADLESS_SERVICE_NAME) || true; \
 		done; \
 	else \
 		echo "Relayer pod not found."; \
 	fi
 	@echo "\n--- 5. Chain Pod Logs (Last 100 lines) ---"
-	@CHAIN_PODS=$$(kubectl get pods -l "app.kubernetes.io/instance=$(RELEASE_NAME),app.kubernetes.io/component=chain" -o jsonpath='{.items[*].metadata.name}'); \
+	@CHAIN_PODS=$$(kubectl get pods -l "app.kubernetes.io/name=$(APP_NAME),app.kubernetes.io/component=chain" -o jsonpath='{.items[*].metadata.name}'); \
 	if [ -n "$$CHAIN_PODS" ]; then \
 		for POD_NAME in $$CHAIN_PODS; do \
 			echo "\n--> Logs for $$POD_NAME:"; \
@@ -116,7 +114,6 @@ portainer-up:
 	@kubectl create namespace portainer
 	@kubectl apply -n portainer -f https://downloads.portainer.io/ce2-19/portainer.yaml
 	@echo "✅  Portainer deployed. Use 'make portainer-info' to get access details."
-
 ## portainer-down: PortainerをKubernetesクラスタから削除します
 portainer-down:
 	@echo "🔥  Deleting Portainer..."
@@ -129,13 +126,11 @@ portainer-info:
 	@echo "1. Get the NodePort using the following command:"
 	@echo "   kubectl get svc -n portainer"
 	@echo "2. Access https://localhost:<NODE_PORT> in your browser (use the port mapped to 9443)."
-
 ## dashboard-up: Kubernetes Dashboardをデプロイします
 dashboard-up:
 	@echo "🌐 Deploying Kubernetes Dashboard..."
 	@kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
 	@echo "✅ Kubernetes Dashboard deployed. Run 'make dashboard-setup' to configure access."
-
 ## dashboard-down: Kubernetes Dashboardを削除します
 dashboard-down:
 	@echo "🔥 Deleting Kubernetes Dashboard..."
@@ -146,10 +141,11 @@ dashboard-down:
 ## dashboard-setup: Dashboard用の管理者アカウントを作成します
 dashboard-setup:
 	@echo "🛠️  Creating dashboard-admin ServiceAccount and ClusterRoleBinding..."
-	@kubectl create serviceaccount dashboard-admin -n kubernetes-dashboard --dry-run=client -o yaml | kubectl apply -f -
-	@kubectl create clusterrolebinding dashboard-admin-binding --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:dashboard-admin --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl create serviceaccount dashboard-admin -n kubernetes-dashboard --dry-run=client -o yaml | \
+	kubectl apply -f -
+	@kubectl create clusterrolebinding dashboard-admin-binding --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:dashboard-admin --dry-run=client -o yaml | \
+	kubectl apply -f -
 	@echo "✅ Setup complete. Run 'make dashboard-token' to retrieve the access token."
-
 ## dashboard-token: Dashboardへのアクセストークンを取得します
 dashboard-token:
 	@echo "🔑  Retrieving access token for Kubernetes Dashboard..."
@@ -168,4 +164,5 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

@@ -39,30 +39,29 @@ sleep 5
 
 # --- Step 3: IBCチャネル情報をRelayerから取得 ---
 echo "--- 📡 Getting IBC channel info from relayer... ---"
-# ★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 # ★★★ これが最も重要な修正点です ★★★
-# ★★★★★★★★★★★★★★★★★★★★★★★★★
-# パス名を正しい `path-data-0-to-meta-0` に修正
-# また、このパスでは meta-0 が宛先(dst)になるため、jqのパスも `.chains.dst.channel_id` に修正
-META_TO_DATA_CHANNEL=$(\
-  kubectl exec -i ${RELAYER_POD} -- rly paths show "path-data-0-to-meta-0" --json | \
-  jq -r '.chains.dst.channel_id'
-)
-# メタデータは meta-0 から送るため、送信元ポートとチャネルIDを取得する必要がある。
-# path-data-0-to-meta-0 では meta-0 は dst にあたるため、
-# 対応する src (data-0) のチャネルIDを取得し、それを使って meta-0 から送る必要がある。
-# rlyは双方向なので、meta-0からdata-0への送信もこのパスで可能。
-# 送信元(meta-0)のチャネルIDを取得
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# init-relayer.sh で作成した 'path-data-0-to-meta-0' のパス情報を取得します。
+# このパスでは meta-0 が宛先(dst)となっているため、jq で .chains.dst.channel_id を
+# 取得することで、meta-0 側のチャネルIDが得られます。
+# 変数名のタイポを修正し、冗長な呼び出しを削除しました。
 META_CHANNEL_ID=$(\
   kubectl exec -i ${RELAYER_POD} -- rly paths show "path-data-0-to-meta-0" --json | \
   jq -r '.chains.dst.channel_id'
 )
+
+if [ -z "${META_CHANNEL_ID}" ] || [ "${META_CHANNEL_ID}" == "null" ]; then
+    echo "🔥 Error: Failed to get channel ID from relayer. Path 'path-data-0-to-meta-0' may not be linked correctly."
+    exit 1
+fi
 
 echo "✅ Found channel on meta-0 for IBC transfer: ${META_CHANNEL_ID}"
 
 # --- Step 4: meta-0 からメタデータをIBCで送信 ---
 echo "--- ✉️  Sending metadata packet from meta-0... ---"
 # send-metadataコマンドでIBCパケットを送信する
+# ※ 'accepts 4 arg(s)' エラーは、上の META_CHANNEL_ID が空だったことが原因のため、この行は修正不要です。
 ${META_0_CMD} tx metastore send-metadata metastore ${META_CHANNEL_ID} "HelloWorld.com" "${DATA_0_INDEX},${DATA_1_INDEX}" --from creator ${TX_FLAGS_META_0} > /dev/null
 echo "✅ Metadata packet sent. Waiting for relayer to process..."
 sleep 15

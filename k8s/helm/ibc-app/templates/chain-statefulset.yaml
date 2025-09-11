@@ -12,14 +12,21 @@ spec:
     matchLabels:
       {{- include "ibc-app.selectorLabels" $ | nindent 6 }}
       app.kubernetes.io/component: chain
-      # ★★★ 修正箇所 (1/2): instance ラベルを {{ .name }} に変更 ★★★
+      # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+      # ★★★ これが最も重要な修正点です (1/2) ★★★
+      # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+      # instance ラベルを各チェーン固有の名前に修正します。
+      # 古い `ibc-app` を指定していた行は削除します。
       app.kubernetes.io/instance: {{ .name }}
   template:
     metadata:
       labels:
         {{- include "ibc-app.selectorLabels" $ | nindent 8 }}
         app.kubernetes.io/component: chain
-        # ★★★ 修正箇所 (2/2): こちらも同様に {{ .name }} に変更 ★★★
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # ★★★ これが最も重要な修正点です (2/2) ★★★
+        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        # こちらも同様に、各チェーン固有の名前に修正します。
         app.kubernetes.io/instance: {{ .name }}
     spec:
       containers:
