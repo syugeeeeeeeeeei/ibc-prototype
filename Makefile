@@ -47,6 +47,45 @@ delete-force:
 	@kubectl delete pvc -l "app.kubernetes.io/name=$(APP_NAME)" --ignore-not-found=true
 
 # =============================================================================
+# Chain Scaffolding Commands
+# =============================================================================
+
+## scaffold-all: 全てのチェーンのソースコードをローカルに生成します
+scaffold-all: scaffold-datachain scaffold-metachain
+
+## scaffold-datachain: datachainのソースコードを ./chain/datachain に生成します
+scaffold-datachain:
+	@if [ -d "chain/datachain" ]; then \
+		echo "ℹ️  'chain/datachain' directory already exists. Skipping scaffold."; \
+	else \
+		echo "🏗️  Scaffolding datachain source code..."; \
+		ignite scaffold chain datachain --skip-git --default-denom uatom --skip-proto --path ./chain/datachain; \
+		cd chain/datachain && \
+		ignite scaffold module datastore --ibc --dep bank --yes && \
+		ignite scaffold packet chunk index:string data:bytes --module datastore --yes && \
+		ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes && \
+		sed -i 's/"datastore-1"/"ibc-proto-1"/g' x/datastore/types/keys.go && \
+		cd ../..; \
+		echo "✅  datachain source code scaffolded in 'chain/datachain'"; \
+	fi
+
+## scaffold-metachain: metachainのソースコードを ./chain/metachain に生成します
+scaffold-metachain:
+	@if [ -d "chain/metachain" ]; then \
+		echo "ℹ️  'chain/metachain' directory already exists. Skipping scaffold."; \
+	else \
+		echo "🏗️  Scaffolding metachain source code..."; \
+		ignite scaffold chain metachain --skip-git --default-denom uatom --skip-proto --path ./chain/metachain; \
+		cd chain/metachain && \
+		ignite scaffold module metastore --ibc --dep bank --yes && \
+		ignite scaffold packet metadata url:string addresses:array.string --module metastore --yes && \
+		ignite scaffold map stored-meta url:string --module metastore --signer creator --yes && \
+		sed -i 's/"metastore-1"/"ibc-proto-1"/g' x/metastore/types/keys.go && \
+		cd ../..; \
+		echo "✅  metachain source code scaffolded in 'chain/metachain'"; \
+	fi
+
+# =============================================================================
 # Utility and Debugging Commands
 # =============================================================================
 
