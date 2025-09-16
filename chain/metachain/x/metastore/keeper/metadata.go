@@ -1,3 +1,5 @@
+// chain/metachain/x/metastore/keeper/metadata_packet.go
+
 package keeper
 
 import (
@@ -32,15 +34,14 @@ func (k Keeper) TransmitMetadataPacket(
 	return k.ibcKeeperFn().ChannelKeeper.SendPacket(sdkCtx, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, packetBytes)
 }
 
-// OnRecvMetadataPacket processes packet reception
+// OnRecvMetadataPacket is called when the metachain receives a packet of this type.
+// This chain is designed to send, not receive, these packets, so this function should ideally not be called.
 func (k Keeper) OnRecvMetadataPacket(ctx context.Context, packet channeltypes.Packet, data types.MetadataPacketData) (packetAck types.MetadataPacketAck, err error) {
-	// This chain is meant to send, not receive this packet type.
-	// Nevertheless, we can add logic here if needed in the future.
-	return packetAck, nil
+	// This module is not meant to receive this packet type, return an error.
+	return packetAck, errors.New("metastore module is not supposed to receive metadata packets")
 }
 
-// OnAcknowledgementMetadataPacket responds to the success or failure of a packet
-// acknowledgement written on the receiving chain.
+// OnAcknowledgementMetadataPacket responds to the success or failure of a packet acknowledgement.
 func (k Keeper) OnAcknowledgementMetadataPacket(ctx context.Context, packet channeltypes.Packet, data types.MetadataPacketData, ack channeltypes.Acknowledgement) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	fmt.Printf("metachain [DEBUG]: OnAcknowledgementPacket received ack: %v\n", ack)
@@ -53,29 +54,29 @@ func (k Keeper) OnAcknowledgementMetadataPacket(ctx context.Context, packet chan
 	case *channeltypes.Acknowledgement_Result:
 		fmt.Println("metachain [DEBUG]: Acknowledgement is a SUCCESS.")
 
-		// Decode the packet acknowledgment (datachainからの応答は空で良いので、ここでは特に使わない)
+		// Decode the packet acknowledgment from datachain
 		var packetAck types.MetadataPacketAck
 		if err := k.cdc.UnmarshalJSON(dispatchedAck.Result, &packetAck); err != nil {
 			fmt.Printf("metachain [ERROR]: cannot unmarshal acknowledgment: %s\n", err.Error())
 			return errors.New("cannot unmarshal acknowledgment")
 		}
 
-		// ★★★ ここが最終的な実装です ★★★
+		// --- ★★★ ここが最重要修正点 ★★★ ---
+		// The core logic: if the acknowledgement is successful, store the metadata.
 		fmt.Println("metachain [DEBUG]: Storing metadata...")
 		storedMeta := types.StoredMeta{
-			Index:   data.Url, // StoredMetaのキーとなるIndexフィールドにURLを設定
+			Index:   data.Url, // Use the URL as the primary key/index for the stored data.
 			Url:     data.Url,
-			Creator: data.Creator, // ステップ2でパケットに含めたCreator情報を使用
+			Creator: data.Creator, // Use the Creator from the original packet data.
 		}
 
-		// `k.SetStoredMeta`が未定義であるというエラーについて:
-		// `ignite scaffold map stored-meta ...` コマンドは、
-		// `x/metastore/keeper/stored_meta.go` というファイルに
-		// `SetStoredMeta`関数を自動生成するはずです。
-		// もしこの関数が存在しない場合、scaffoldコマンドが正しく実行されなかった可能性があります。
-		k.SetStoredMeta(sdkCtx, storedMeta)
+		// Use the StoredMeta field from the keeper to call the Set method.
+		if err := k.StoredMeta.Set(sdkCtx, storedMeta.Index, storedMeta); err != nil {
+			return err
+		}
 
 		fmt.Printf("metachain [SUCCESS]: Stored metadata for URL: %s\n", data.Url)
+		// --- ★★★ 修正ここまで ★★★ ---
 
 		return nil
 	default:
@@ -83,8 +84,8 @@ func (k Keeper) OnAcknowledgementMetadataPacket(ctx context.Context, packet chan
 	}
 }
 
-// OnTimeoutMetadataPacket responds to the case where a packet has not been transmitted because of a timeout
+// OnTimeoutMetadataPacket responds to a packet timeout.
 func (k Keeper) OnTimeoutMetadataPacket(ctx context.Context, packet channeltypes.Packet, data types.MetadataPacketData) error {
-	// TODO: packet timeout logic
+	// TODO: logic for packet timeout
 	return nil
 }

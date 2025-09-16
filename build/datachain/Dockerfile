@@ -19,8 +19,6 @@ COPY ./chain/datachain /app/datachain
 
 WORKDIR /app/datachain
 
-RUN sed -i 's/"datastore-1"/"ibc-proto-1"/g' x/datastore/types/keys.go
-
 # --- datachaind バイナリをビルド ---
 # ignite chain build コマンドは $GOPATH/bin にバイナリを生成する
 # この場合、コンテナ内のGoのデフォルトのGOPATHは /root/go であるため、

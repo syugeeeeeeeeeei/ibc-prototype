@@ -61,6 +61,7 @@ scaffold-datachain:
 		echo "🏗️  Scaffolding datachain source code..."; \
 		ignite scaffold chain datachain --skip-git --default-denom uatom --skip-proto --path ./chain/datachain; \
 		cd chain/datachain && \
+		echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml && \
 		ignite scaffold module datastore --ibc --dep bank --yes && \
 		ignite scaffold packet chunk index:string data:bytes --module datastore --yes && \
 		ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes && \
@@ -77,6 +78,7 @@ scaffold-metachain:
 		echo "🏗️  Scaffolding metachain source code..."; \
 		ignite scaffold chain metachain --skip-git --default-denom uatom --skip-proto --path ./chain/metachain; \
 		cd chain/metachain && \
+		echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml && \
 		ignite scaffold module metastore --ibc --dep bank --yes && \
 		ignite scaffold packet metadata url:string addresses:array.string --module metastore --yes && \
 		ignite scaffold map stored-meta url:string --module metastore --signer creator --yes && \
