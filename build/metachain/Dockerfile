@@ -27,6 +27,8 @@ RUN ignite scaffold module metastore --ibc --dep bank --yes
 RUN ignite scaffold packet metadata url:string addresses:array.string --module metastore --yes
 RUN ignite scaffold map stored-meta url:string --module metastore --signer creator --yes
 
+RUN sed -i 's/"metastore-1"/"ibc-proto-1"/g' x/metastore/types/keys.go
+
 # --- datachaind バイナリをビルド ---
 # ignite chain build コマンドは $GOPATH/bin にバイナリを生成する
 # この場合、コンテナ内のGoのデフォルトのGOPATHは /root/go であるため、

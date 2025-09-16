@@ -13,56 +13,43 @@ DENOM="uatom"
 PATH_PREFIX="path"
 MNEMONICS_DIR="/etc/relayer/mnemonics"
 
-# --- 必須変数のチェック ---
 if [ -z "$CHAIN_NAMES_CSV" ] || [ -z "$HEADLESS_SERVICE_NAME" ]; then
   echo "Error: CHAIN_NAMES_CSV and HEADLESS_SERVICE_NAME must be set."
   exit 1
 fi
 
-# --- リレイヤーの初期化 ---
-echo "--- Initializing relayer configuration ---"
-if [ ! -f "$RELAYER_HOME/config/config.yaml" ]; then
-    rly config init
-    # CSVをスペース区切りのリストに変換
-    CHAIN_IDS=$(echo "$CHAIN_NAMES_CSV" | tr ',' ' ')
+CHAIN_IDS=$(echo "$CHAIN_NAMES_CSV" | tr ',' ' ')
 
-    # --- ループ処理で全チェーンの情報を追加 ---
-    echo "--- Adding chain configurations ---"
+# --- リレイヤーの初期化（初回起動時のみ） ---
+if [ ! -f "$RELAYER_HOME/config/config.yaml" ]; then
+    echo "--- Initializing relayer configuration ---"
+    rly config init
+
     TMP_DIR="/tmp/relayer-configs"
     mkdir -p "$TMP_DIR"
     trap 'rm -rf -- "$TMP_DIR"' EXIT
 
+    # --- チェーン設定の追加 ---
+    echo "--- Adding chain configurations ---"
     for CHAIN_ID in $CHAIN_IDS; do
         POD_HOSTNAME="${RELEASE_NAME}-${CHAIN_ID}-0"
         RPC_ADDR="http://${POD_HOSTNAME}.${HEADLESS_SERVICE_NAME}.${POD_NAMESPACE}.svc.cluster.local:26657"
         GRPC_ADDR="${POD_HOSTNAME}.${HEADLESS_SERVICE_NAME}.${POD_NAMESPACE}.svc.cluster.local:9090"
         TMP_JSON_FILE="${TMP_DIR}/${CHAIN_ID}.json"
-
-        echo "--> Adding chain: $CHAIN_ID (connecting to ${POD_HOSTNAME})"
-
         cat > "$TMP_JSON_FILE" <<EOF
-    {
-      "type": "cosmos",
-      "value": {
-        "key": "$KEY_NAME",
-        "chain-id": "$CHAIN_ID",
-        "rpc-addr": "$RPC_ADDR",
-        "grpc-addr": "$GRPC_ADDR",
-        "account-prefix": "cosmos",
-        "keyring-backend": "test",
-        "gas-adjustment": 1.5,
-        "gas-prices": "0.001$DENOM",
-        "debug": false,
-        "timeout": "20s",
-        "output-format": "json",
-        "sign-mode": "direct"
-      }
-    }
+{
+  "type": "cosmos",
+  "value": {
+    "key": "$KEY_NAME", "chain-id": "$CHAIN_ID", "rpc-addr": "$RPC_ADDR", "grpc-addr": "$GRPC_ADDR",
+    "account-prefix": "cosmos", "keyring-backend": "test", "gas-adjustment": 1.5,
+    "gas-prices": "0.001$DENOM", "debug": false, "timeout": "20s", "output-format": "json", "sign-mode": "direct"
+  }
+}
 EOF
         rly chains add --file "$TMP_JSON_FILE"
     done
 
-    # --- ループ処理で全キーをリストア ---
+    # --- キーのリストア ---
     echo "--- Restoring relayer keys ---"
     for CHAIN_ID in $CHAIN_IDS; do
         MNEMONIC_FILE="${MNEMONICS_DIR}/${CHAIN_ID}.mnemonic"
@@ -72,86 +59,63 @@ EOF
         rly keys restore "$CHAIN_ID" "$KEY_NAME" "$RELAYER_MNEMONIC"
     done
 
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-    # ★★★ ここが最も重要な修正点です（完全版） ★★★
-    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-
-    # --- RPCエンドポイントが利用可能になるのを待つ ---
-    echo "--- Waiting for RPC endpoints to be ready... ---"
-    for CHAIN_ID in $CHAIN_IDS; do
-        echo "--> Checking RPC for $CHAIN_ID"
-        # RPCアドレスを動的に構築
-        RPC_ADDR="http://${RELEASE_NAME}-${CHAIN_ID}-0.${HEADLESS_SERVICE_NAME}.${POD_NAMESPACE}.svc.cluster.local:26657"
-        ATTEMPTS=0
-        MAX_ATTEMPTS=20
-        until curl --output /dev/null --silent --head --fail "$RPC_ADDR/status"; do
-            ATTEMPTS=$((ATTEMPTS + 1))
-            if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
-                echo "!!! Timed out waiting for RPC on $CHAIN_ID !!!"
-                exit 1
-            fi
-            echo "    Waiting for RPC on $CHAIN_ID... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)"
-            sleep 5
-        done
-        echo "--> RPC is ready on $CHAIN_ID"
-    done
-
-
-    # --- アプリケーション固有のIBCパスを作成・接続 ---
-    echo "--- Creating and linking application-specific IBC paths ---"
-
+    # --- IBCパスの定義 ---
+    echo "--- Defining IBC paths ---"
     META_CHAIN_ID=""
     DATA_CHAIN_IDS=""
     for CHAIN_ID in $CHAIN_IDS; do
-      if [[ $CHAIN_ID == meta-* ]]; then
-        META_CHAIN_ID=$CHAIN_ID
-      else
-        DATA_CHAIN_IDS="$DATA_CHAIN_IDS $CHAIN_ID"
-      fi
+      if [[ $CHAIN_ID == meta-* ]]; then META_CHAIN_ID=$CHAIN_ID; else DATA_CHAIN_IDS="$DATA_CHAIN_IDS $CHAIN_ID"; fi
     done
-
-    if [ -z "$META_CHAIN_ID" ]; then
-      echo "Error: No 'meta' chain found in CHAIN_NAMES_CSV."
-      exit 1
-    fi
+    if [ -z "$META_CHAIN_ID" ]; then echo "Error: No 'meta' chain found."; exit 1; fi
 
     for DATA_CHAIN_ID in $DATA_CHAIN_IDS; do
         PATH_NAME="${PATH_PREFIX}-${DATA_CHAIN_ID}-to-${META_CHAIN_ID}"
-
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # ★★★ これが最も重要な修正点です (1/2) ★★★
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # gaiaのサンプルを参考に、rly paths new コマンドに全ての情報をフラグで渡します。
-        # これにより、`datastore`と`metastore`というカスタムポートを持つパス定義が正しく生成されます。
-        echo "--> Creating new IBC path definition: $PATH_NAME"
-        rly paths new "$DATA_CHAIN_ID" "$META_CHAIN_ID" "$PATH_NAME" --src-port datastore --dst-port metastore --order unordered --version "ics20-1"
-
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # ★★★ これが最も重要な修正点です (2/2) ★★★
-        # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        # gaiaのサンプルを参考に、堅牢な再試行ループを実装します。
-        # これにより、チェーンの準備が整うタイミングのズレを吸収し、確実にリンクを確立します。
-        echo "--> Attempting to link path: $PATH_NAME"
-        ATTEMPTS=0
-        MAX_ATTEMPTS=5
-        SUCCESS=false
-        until $SUCCESS; do
-            if rly transact link "$PATH_NAME" --debug; then
-                echo "✅ Successfully linked $PATH_NAME"
-                SUCCESS=true
-            else
-                ATTEMPTS=$((ATTEMPTS + 1))
-                if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
-                    echo "!!! Failed to link path $PATH_NAME after $MAX_ATTEMPTS attempts. !!!"
-                    exit 1 # 失敗したらコンテナを終了させる
-                fi
-                echo "    Link failed. Retrying in 10 seconds... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)"
-                sleep 10
-            fi
-        done
+        echo "--> Defining IBC path: $PATH_NAME with version ibc-proto-1"
+        rly paths new "$DATA_CHAIN_ID" "$META_CHAIN_ID" "$PATH_NAME"
     done
+
+    # --- 全チェーンの準備待機 ---
+    echo "--- Waiting for all chains to be ready... ---"
+    for CHAIN_ID in $CHAIN_IDS; do
+        RPC_ADDR="http://${RELEASE_NAME}-${CHAIN_ID}-0.${HEADLESS_SERVICE_NAME}.${POD_NAMESPACE}.svc.cluster.local:26657"
+        echo "--> Waiting for chain '$CHAIN_ID' to reach height 5..."
+        ATTEMPTS=0; MAX_ATTEMPTS=30
+        until [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; do
+            HEIGHT=$(curl -s "${RPC_ADDR}/status" | jq -r '.result.sync_info.latest_block_height // "0"')
+            if [ -n "$HEIGHT" ] && [ "$HEIGHT" -ge 5 ]; then echo "    Chain '$CHAIN_ID' is ready at height $HEIGHT."; break; fi
+            ATTEMPTS=$((ATTEMPTS + 1)); echo "    Current height of '$CHAIN_ID' is $HEIGHT. Waiting... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)"; sleep 5
+        done
+        if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then echo "!!! Timed out waiting for chain '$CHAIN_ID' to start. !!!"; exit 1; fi
+    done
+
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    # ★★★ ここが最終修正点：クライアント、接続、チャネルを順番に手動で確立 ★★★
+    # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+    echo "--- Manually creating Clients, Connections, and Channels for all paths ---"
+    for DATA_CHAIN_ID in $DATA_CHAIN_IDS; do
+        PATH_NAME="${PATH_PREFIX}-${DATA_CHAIN_ID}-to-${META_CHAIN_ID}"
+        echo "--> Full link setup for path: $PATH_NAME"
+        
+        # 1. クライアント作成 (--overrideで常に新規作成)
+        echo "    Step 1: Creating clients..."
+        rly transact clients "$PATH_NAME" --override
+        sleep 5
+
+        # 2. 接続確立
+        echo "    Step 2: Creating connection..."
+        rly transact connection "$PATH_NAME" -d -t 30s -r 5
+        sleep 5
+
+        # 3. チャネル開設
+        echo "    Step 3: Creating channel..."
+        rly transact channel "$PATH_NAME" --src-port datastore --dst-port metastore --order unordered --version "ibc-proto-1" -d -t 30s -r 5
+        
+        echo "✅ Path $PATH_NAME fully linked."
+    done
+
+    echo "--- Initialization complete ---"
 fi
 
-# --- 全パスのリレイヤーを起動 ---
-echo "--- Starting relayers for all configured paths ---"
+# --- Relayerを起動し、確立されたチャネルでパケットをリッスンする ---
+echo "--- Starting relayer to listen for packets on established channels... ---"
 exec rly start --debug

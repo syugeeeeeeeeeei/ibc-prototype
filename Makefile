@@ -1,5 +1,5 @@
 # .PHONY: 偽のターゲットを定義
-.PHONY: help build-all build-datachain build-metachain build-relayer deploy delete delete-force logs logs-chain logs-relayer status debug-info portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token
+.PHONY: help build-all build-datachain build-metachain build-relayer deploy delete delete-force logs logs-chain logs-relayer status debug-info portainer-up portainer-down portainer-info dashboard-up dashboard-down dashboard-setup dashboard-token tx-test
 
 # --- 変数定義 ---
 APP_NAME ?= ibc-app
@@ -155,6 +155,10 @@ dashboard-token:
 	echo "$$TOKEN"; \
 	echo "---"
 
+tx-test:
+	@echo "🔄  Running test transaction between chains..."
+	@./scripts/test/tx-test.sh
+	
 # =============================================================================
 # Help
 # =============================================================================

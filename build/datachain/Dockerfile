@@ -27,6 +27,8 @@ RUN ignite scaffold module datastore --ibc --dep bank --yes
 RUN ignite scaffold packet chunk index:string data:bytes --module datastore --yes
 RUN ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes
 
+RUN sed -i 's/"datastore-1"/"ibc-proto-1"/g' x/datastore/types/keys.go
+
 # --- datachaind バイナリをビルド ---
 # ignite chain build コマンドは $GOPATH/bin にバイナリを生成する
 # この場合、コンテナ内のGoのデフォルトのGOPATHは /root/go であるため、
