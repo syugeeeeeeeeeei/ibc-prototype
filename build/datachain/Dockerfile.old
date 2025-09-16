@@ -15,9 +15,17 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN curl -sSfL https://get.ignite.com/cli! | bash
 ENV PATH="/root/go/bin:${PATH}"
 
-COPY ./chain/datachain /app/datachain
+# 作業ディレクトリを設定
+WORKDIR /app
 
+# --- datachainの雛形をDockerfile内で動的に生成する ---
+RUN ignite scaffold chain datachain --skip-git --default-denom uatom --skip-proto
 WORKDIR /app/datachain
+RUN mkdir -p ./proto && \
+	echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml
+RUN ignite scaffold module datastore --ibc --dep bank --yes
+RUN ignite scaffold packet chunk index:string data:bytes --module datastore --yes
+RUN ignite scaffold map stored-chunk data:bytes --module datastore --signer creator --yes
 
 RUN sed -i 's/"datastore-1"/"ibc-proto-1"/g' x/datastore/types/keys.go
 

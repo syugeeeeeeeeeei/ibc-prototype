@@ -1,0 +1,17 @@
+syntax = "proto3";
+package metachain.metachain.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+import "metachain/metachain/v1/params.proto";
+
+option go_package = "metachain/x/metachain/types";
+
+// GenesisState defines the metachain module's genesis state.
+message GenesisState {
+  // params defines all the parameters of the module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

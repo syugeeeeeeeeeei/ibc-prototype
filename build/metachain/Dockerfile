@@ -15,17 +15,9 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN curl -sSfL https://get.ignite.com/cli! | bash
 ENV PATH="/root/go/bin:${PATH}"
 
-# 作業ディレクトリを設定
-WORKDIR /app
+COPY ./chain/metachain /app/metachain
 
-# --- datachainの雛形をDockerfile内で動的に生成する ---
-RUN ignite scaffold chain metachain --skip-git --default-denom uatom --skip-proto
 WORKDIR /app/metachain
-RUN mkdir -p ./proto && \
-	echo "version: v2\nplugins: []" > ./proto/buf.gen.swagger.yaml
-RUN ignite scaffold module metastore --ibc --dep bank --yes
-RUN ignite scaffold packet metadata url:string addresses:array.string --module metastore --yes
-RUN ignite scaffold map stored-meta url:string --module metastore --signer creator --yes
 
 RUN sed -i 's/"metastore-1"/"ibc-proto-1"/g' x/metastore/types/keys.go
 

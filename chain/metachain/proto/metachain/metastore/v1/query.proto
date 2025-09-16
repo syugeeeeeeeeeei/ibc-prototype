@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package metachain.metastore.v1;
+
+import "amino/amino.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "metachain/metastore/v1/params.proto";
+import "metachain/metastore/v1/stored_meta.proto";
+
+option go_package = "metachain/x/metastore/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // Parameters queries the parameters of the module.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/metachain/metastore/v1/params";
+  }
+
+  // ListStoredMeta Queries a list of StoredMeta items.
+  rpc GetStoredMeta(QueryGetStoredMetaRequest) returns (QueryGetStoredMetaResponse) {
+    option (google.api.http).get = "/metachain/metastore/v1/stored_meta/{index}";
+  }
+
+  // ListStoredMeta defines the ListStoredMeta RPC.
+  rpc ListStoredMeta(QueryAllStoredMetaRequest) returns (QueryAllStoredMetaResponse) {
+    option (google.api.http).get = "/metachain/metastore/v1/stored_meta";
+  }
+}
+
+// QueryParamsRequest is request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params holds all the parameters of this module.
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// QueryGetStoredMetaRequest defines the QueryGetStoredMetaRequest message.
+message QueryGetStoredMetaRequest {
+  string index = 1;
+}
+
+// QueryGetStoredMetaResponse defines the QueryGetStoredMetaResponse message.
+message QueryGetStoredMetaResponse {
+  StoredMeta stored_meta = 1 [(gogoproto.nullable) = false];
+}
+
+// QueryAllStoredMetaRequest defines the QueryAllStoredMetaRequest message.
+message QueryAllStoredMetaRequest {
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryAllStoredMetaResponse defines the QueryAllStoredMetaResponse message.
+message QueryAllStoredMetaResponse {
+  repeated StoredMeta stored_meta = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}

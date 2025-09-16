@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package metachain.metastore.v1;
+
+import "amino/amino.proto";
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "metachain/metastore/v1/params.proto";
+
+option go_package = "metachain/x/metastore/types";
+
+// Msg defines the Msg service.
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  // UpdateParams defines a (governance) operation for updating the module
+  // parameters. The authority defaults to the x/gov module account.
+  rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
+
+  // SendMetadata defines the SendMetadata RPC.
+  rpc SendMetadata(MsgSendMetadata) returns (MsgSendMetadataResponse);
+
+  // CreateStoredMeta defines the CreateStoredMeta RPC.
+  rpc CreateStoredMeta(MsgCreateStoredMeta) returns (MsgCreateStoredMetaResponse);
+
+  // UpdateStoredMeta defines the UpdateStoredMeta RPC.
+  rpc UpdateStoredMeta(MsgUpdateStoredMeta) returns (MsgUpdateStoredMetaResponse);
+
+  // DeleteStoredMeta defines the DeleteStoredMeta RPC.
+  rpc DeleteStoredMeta(MsgDeleteStoredMeta) returns (MsgDeleteStoredMetaResponse);
+}
+
+// MsgUpdateParams is the Msg/UpdateParams request type.
+message MsgUpdateParams {
+  option (cosmos.msg.v1.signer) = "authority";
+  option (amino.name) = "metachain/x/metastore/MsgUpdateParams";
+
+  // authority is the address that controls the module (defaults to x/gov unless overwritten).
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+
+  // params defines the module parameters to update.
+
+  // NOTE: All parameters must be supplied.
+  Params params = 2 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// MsgUpdateParamsResponse defines the response structure for executing a
+// MsgUpdateParams message.
+message MsgUpdateParamsResponse {}
+
+// MsgSendMetadata defines the MsgSendMetadata message.
+message MsgSendMetadata {
+  option (cosmos.msg.v1.signer) = "creator";
+  string url = 5;
+  repeated string addresses = 6;
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string port = 2;
+  string channelID = 3;
+  uint64 timeoutTimestamp = 4;
+}
+
+// MsgSendMetadataResponse defines the MsgSendMetadataResponse message.
+message MsgSendMetadataResponse {}
+
+// MsgCreateStoredMeta defines the MsgCreateStoredMeta message.
+message MsgCreateStoredMeta {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string index = 2;
+  string url = 3;
+}
+
+// MsgCreateStoredMetaResponse defines the MsgCreateStoredMetaResponse message.
+message MsgCreateStoredMetaResponse {}
+
+// MsgUpdateStoredMeta defines the MsgUpdateStoredMeta message.
+message MsgUpdateStoredMeta {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string index = 2;
+  string url = 3;
+}
+
+// MsgUpdateStoredMetaResponse defines the MsgUpdateStoredMetaResponse message.
+message MsgUpdateStoredMetaResponse {}
+
+// MsgDeleteStoredMeta defines the MsgDeleteStoredMeta message.
+message MsgDeleteStoredMeta {
+  option (cosmos.msg.v1.signer) = "creator";
+  string creator = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string index = 2;
+}
+
+// MsgDeleteStoredMetaResponse defines the MsgDeleteStoredMetaResponse message.
+message MsgDeleteStoredMetaResponse {}
